@@ -6,10 +6,14 @@ reviewable. ``tx(actor=...)`` sets ``sanctions.actor`` for the audit trigger.
 
 from __future__ import annotations
 
+import json
 import threading
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
+from datetime import date, datetime
+from decimal import Decimal
 from typing import Any
+from uuid import UUID
 
 import psycopg
 from psycopg.rows import dict_row
@@ -89,8 +93,24 @@ def fetch_val(
     return next(iter(row.values())) if isinstance(row, dict) else row[0]
 
 
+def _json_default(o: Any) -> Any:
+    if isinstance(o, Decimal):
+        return float(o)
+    if isinstance(o, (datetime, date)):
+        return o.isoformat()
+    if isinstance(o, UUID):
+        return str(o)
+    if isinstance(o, (set, frozenset)):
+        return sorted(o)
+    raise TypeError(f"not JSON serialisable: {type(o).__name__}")
+
+
+def dumps(value: Any) -> str:
+    return json.dumps(value, default=_json_default, ensure_ascii=False)
+
+
 def jsonb(value: Any) -> Jsonb:
-    return Jsonb(value)
+    return Jsonb(value, dumps=dumps)
 
 
 def notify(conn: psycopg.Connection[Any], channel: str, payload: str) -> None:

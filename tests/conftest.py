@@ -20,6 +20,7 @@ os.environ["SANCTIONS_ANALYST_DATABASE_URL"] = TEST_DB_URL.replace(
 os.environ.setdefault("SANCTIONS_ANALYST_PASSWORD", "sanctions_analyst")
 os.environ["SANCTIONS_ENVIRONMENT"] = "test"
 os.environ["SANCTIONS_AUTH_MODE"] = "basic"
+os.environ["SANCTIONS_HTTP_ALLOW_PRIVATE_NETWORKS"] = "true"  # skip DNS lookups for mocked hosts
 os.environ.pop("OPENAI_API_KEY", None)
 
 
