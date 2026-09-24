@@ -1,0 +1,52 @@
+# Local / single-VM deployment: Postgres 16 + supervisor (scheduler, workers, agent) + API/UI.
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: sanctions
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sanctions}
+      POSTGRES_DB: sanctions
+    volumes: [pgdata:/var/lib/postgresql/data]
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sanctions"]
+      interval: 5s
+      retries: 20
+
+  migrate:
+    build: .
+    command: ["sh", "-c", "alembic upgrade head && sanctions-agent sources import"]
+    env_file: [.env]
+    environment:
+      SANCTIONS_DATABASE_URL: postgresql://sanctions:${POSTGRES_PASSWORD:-sanctions}@postgres:5432/sanctions
+    depends_on:
+      postgres: {condition: service_healthy}
+
+  supervisor:
+    build: .
+    command: ["sanctions-agent", "supervise"]
+    env_file: [.env]
+    environment:
+      SANCTIONS_DATABASE_URL: postgresql://sanctions:${POSTGRES_PASSWORD:-sanctions}@postgres:5432/sanctions
+    volumes: [blobs:/data/blobs, work:/data/work]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    restart: unless-stopped
+
+  api:
+    build: .
+    command: ["sanctions-agent", "serve"]
+    env_file: [.env]
+    environment:
+      SANCTIONS_DATABASE_URL: postgresql://sanctions:${POSTGRES_PASSWORD:-sanctions}@postgres:5432/sanctions
+      SANCTIONS_ANALYST_DATABASE_URL: postgresql://sanctions_analyst:${ANALYST_PASSWORD:-sanctions_analyst}@postgres:5432/sanctions
+    volumes: [blobs:/data/blobs]
+    ports: ["8080:8080"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    restart: unless-stopped
+
+volumes:
+  pgdata: {}
+  blobs: {}
+  work: {}

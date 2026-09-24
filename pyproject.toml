@@ -1,0 +1,92 @@
+[project]
+name = "sanctions-agent"
+version = "0.1.0"
+description = "Self-healing, agent-supervised ingestion of official sanctions lists (Level 1) and free enrichment (Level 2) into Postgres"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+  "httpx>=0.28",
+  "tenacity>=9.0",
+  "lxml>=5.3",
+  "pydantic>=2.9",
+  "pydantic-settings>=2.6",
+  "psycopg[binary]>=3.2",
+  "psycopg-pool>=3.2",
+  "alembic>=1.14",
+  "sqlalchemy>=2.0",
+  "structlog>=24.4",
+  "prometheus-client>=0.21",
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.32",
+  "jinja2>=3.1",
+  "python-multipart>=0.0.17",
+  "typer>=0.13",
+  "rich>=13.9",
+  "rapidfuzz>=3.10",
+  "pycountry>=24.6",
+  "croniter>=5.0",
+  "sqlglot>=25.0",
+  "openai>=1.60",
+  "openai-agents>=0.2",
+  "pyyaml>=6.0",
+  "openpyxl>=3.1",
+  "python-dateutil>=2.9",
+]
+
+[project.optional-dependencies]
+s3 = ["boto3>=1.35"]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3",
+  "pytest-asyncio>=0.24",
+  "respx>=0.21",
+  "ruff>=0.8",
+  "mypy>=1.13",
+  "types-PyYAML",
+  "types-python-dateutil",
+  "lxml-stubs",
+  "playwright>=1.48",
+]
+
+[project.scripts]
+sanctions-agent = "sanctions_agent.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sanctions_agent"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py313"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF"]
+ignore = ["S101", "S608", "RUF012", "S311", "B008", "S603", "S607", "RUF001", "RUF002", "RUF003"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "B"]
+"migrations/**" = ["E501"]
+
+[tool.mypy]
+python_version = "3.13"
+packages = ["sanctions_agent"]
+mypy_path = "src"
+ignore_missing_imports = true
+warn_unused_ignores = true
+check_untyped_defs = true
+no_implicit_optional = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+  "live: hits real government/enrichment endpoints (run on the corporate network)",
+  "llm: calls the real OpenAI API (needs OPENAI_API_KEY)",
+  "ui: browser smoke tests (Playwright/Chromium)",
+]
+addopts = "-m 'not live and not llm'"

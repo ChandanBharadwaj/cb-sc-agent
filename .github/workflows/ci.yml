@@ -1,0 +1,30 @@
+name: ci
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: sanctions
+          POSTGRES_PASSWORD: sanctions
+          POSTGRES_DB: sanctions_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U sanctions" --health-interval 5s --health-retries 20
+    env:
+      SANCTIONS_TEST_DATABASE_URL: postgresql://sanctions:sanctions@localhost:5432/sanctions_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+      - run: uv sync --frozen
+      - run: uv run ruff check src tests
+      - run: uv run ruff format --check src tests
+      - run: uv run mypy
+      - run: uv run pytest -q
