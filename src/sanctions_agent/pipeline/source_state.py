@@ -18,24 +18,40 @@ RETRY_BASE = timedelta(minutes=10)
 RETRY_MAX = timedelta(hours=2)
 
 
-def on_success(conn: psycopg.Connection[Any], source_id: str, *, changed: bool, fetched: bool = True) -> None:
+def on_success(
+    conn: psycopg.Connection[Any],
+    source_id: str,
+    *,
+    changed: bool,
+    fetched: bool = True,
+    fresh: bool | None = None,
+) -> None:
+    """``fetched``: the publisher was contacted (politeness clock). ``fresh``: the data is new from the publisher
+    (freshness SLO) - true for fetches, manual loads and curated builds, false for re-parses of archived bytes."""
+    fresh = fetched if fresh is None else fresh
     row = fetch_one(conn, "SELECT * FROM source WHERE source_id = %s FOR UPDATE", (source_id,))
     assert row is not None
     now = datetime.now(UTC)
     nxt = Schedule.from_row(row).next_after(now)
     conn.execute(
-        """UPDATE source SET last_attempt_at = %s, last_success_at = %s,
+        """UPDATE source SET last_success_at = CASE WHEN %s THEN %s ELSE last_success_at END,
+               last_attempt_at = CASE WHEN %s THEN %s ELSE last_attempt_at END,
                last_fetch_at = CASE WHEN %s THEN %s ELSE last_fetch_at END,
                last_change_at = CASE WHEN %s THEN %s ELSE last_change_at END,
                consecutive_failures = 0, breaker_state = 'CLOSED', breaker_opened_at = NULL, breaker_retry_at = NULL,
                next_due_at = %s
            WHERE source_id = %s""",
-        (now, now, fetched, now, changed, now, nxt, source_id),
+        (fresh, now, fetched, now, fetched, now, changed, now, nxt, source_id),
     )
 
 
-def on_data_problem(conn: psycopg.Connection[Any], source_id: str) -> None:
-    """File fetched but not publishable (quarantined / held): the source is reachable, data is stale."""
+def on_data_problem(conn: psycopg.Connection[Any], source_id: str, *, fetched: bool = True) -> None:
+    """File not publishable (quarantined / held): the source is reachable, data is stale.
+
+    ``fetched`` is False for re-parses of archived bytes: the publisher was not contacted, so the politeness
+    clock (``last_attempt_at``) and the schedule are left alone."""
+    if not fetched:
+        return
     row = fetch_one(conn, "SELECT * FROM source WHERE source_id = %s FOR UPDATE", (source_id,))
     assert row is not None
     now = datetime.now(UTC)

@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block subtitle %}<div class="sub">Nothing an agent extracts or proposes reaches screening until a human approves it here.</div>{% endblock %}
+{% block content %}
+<div class="row" style="margin-bottom:14px">
+  <select id="r-status"><option>PENDING</option><option>APPLIED</option><option>REJECTED</option><option>EXPIRED</option><option value="ALL">All</option></select>
+  <select id="r-kind"><option value="">All kinds</option><option>REMOVAL_CONFIRMATION</option><option>LARGE_CHANGE_RELEASE</option>
+    <option>ANNEX_ENTRY</option><option>NOTICE_LINK</option><option>ENRICHMENT_MATCH</option><option>CONFIG_CHANGE</option><option>SOURCE_ACTIVATION</option></select>
+</div>
+<div id="proposals"></div>
+{% endblock %}

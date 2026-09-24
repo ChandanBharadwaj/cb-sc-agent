@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block subtitle %}<div class="sub">Aggregates only — counts, fill rates, trends and issues. No record-level data is shown.</div>{% endblock %}
+{% block content %}
+<div class="row" style="margin-bottom:14px">
+  <label class="field">Source <select id="q-source"></select></label>
+  <label class="field">Period <select id="q-days"><option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option><option value="90">Last 90 days</option></select></label>
+</div>
+<div class="grid two">
+  <div class="card"><div class="card-head"><h2 id="trend-title">Records per published version</h2>
+    <button class="view-toggle" data-toggle="trend">Table view</button></div>
+    <div class="chart-box" id="trend-chart-box"><canvas id="trend-chart"></canvas></div>
+    <div class="table-wrap hidden" id="trend-table"></div></div>
+  <div class="card"><div class="card-head"><h2>Changes per day</h2>
+    <button class="view-toggle" data-toggle="changes">Table view</button></div>
+    <div class="chart-legend" id="changes-legend"></div>
+    <div class="chart-box" id="changes-chart-box"><canvas id="changes-chart"></canvas></div>
+    <div class="table-wrap hidden" id="changes-table"></div></div>
+</div>
+<div class="card"><h2>Field fill rates vs floors <span class="sub">(latest validated version of each list — a quarantined candidate shows why)</span></h2><div id="fill-rates"></div></div>
+<div class="card"><h2>Open data-quality issues</h2><div id="issues"></div></div>
+<div class="card"><h2>Other quality metrics <span class="sub">(alias quality, checksums, unmapped countries, date precision)</span></h2><div id="metrics"></div></div>
+<div class="card"><details><summary><strong>Data dictionary</strong> — which publisher field maps to which canonical field</summary><div id="catalog" style="margin-top:10px"></div></details></div>
+{% endblock %}

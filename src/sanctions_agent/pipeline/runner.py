@@ -59,6 +59,13 @@ class RunContext:
         self.raw_sha256: str | None = None
         self.raw_path: Path | None = None
         self.http_last_modified: str | None = None
+        self.fetched = False  # did this run contact the publisher? (politeness clock)
+
+    @property
+    def fresh(self) -> bool:
+        """New data from the publisher (freshness SLO): a fetch, an out-of-band manual load or a curated build.
+        A re-parse of archived bytes is not fresh."""
+        return self.fetched or bool(self.options.get("manual_load")) or self.source.kind == "CURATED_LIST"
 
     def check_cancel(self) -> None:
         if self.cancel_event.is_set() or runs.cancel_requested(self.run_id):
@@ -205,6 +212,11 @@ class PipelineRunner:
         fc = src.config.fetch  # type: ignore[attr-defined]
         ctx.progress.step("FETCH")
         attempt_no = runs.step_start(ctx.run_id, "FETCH")
+        ctx.fetched = True
+        with (
+            tx() as conn
+        ):  # record the contact now, so politeness holds even if this process dies mid-download
+            conn.execute("UPDATE source SET last_attempt_at = now() WHERE source_id = %s", (src.source_id,))
         conditional = None
         if fc.conditional_get and not ctx.options.get("force_refetch") and src.current_version_id:
             with tx() as conn:
@@ -336,7 +348,7 @@ class PipelineRunner:
                         error_detail=f"same content as version seq {pending['seq']}, still {pending['status']}",
                         summary={"same_as_version_id": pending["version_id"]},
                     )
-                    source_state.on_data_problem(conn, src.source_id)
+                    source_state.on_data_problem(conn, src.source_id, fetched=ctx.fetched)
                     return str(pending["status"])
         return "CONTINUE"
 
@@ -620,7 +632,7 @@ class PipelineRunner:
                 conn, source_id=src.source_id, run_id=ctx.run_id, version_id=ctx.version_id
             )
             runs.step_finish(conn, ctx.run_id, "DIFF_PUBLISH", a, detail=summary)
-            source_state.on_success(conn, src.source_id, changed=True, fetched=True)
+            source_state.on_success(conn, src.source_id, changed=True, fetched=ctx.fetched, fresh=ctx.fresh)
             self._consume_signals(conn, ctx)
             incidents.resolve(
                 conn,
@@ -693,7 +705,9 @@ class PipelineRunner:
             return self._finish_no_change_conn(conn, ctx, why, fetched)
 
     def _finish_no_change_conn(self, conn: Any, ctx: RunContext, why: str, fetched: bool) -> str:
-        source_state.on_success(conn, ctx.source.source_id, changed=False, fetched=fetched)
+        source_state.on_success(
+            conn, ctx.source.source_id, changed=False, fetched=fetched, fresh=fetched or ctx.fresh
+        )
         unconsumed = fetch_val(
             conn,
             "SELECT count(*) FROM signal WHERE target_source_id = %s AND consumed_at IS NULL"
@@ -756,7 +770,7 @@ class PipelineRunner:
                 "run_id": ctx.run_id,
             },
         )
-        source_state.on_data_problem(conn, src.source_id)
+        source_state.on_data_problem(conn, src.source_id, fetched=ctx.fetched)
         runs.finish_run(
             conn,
             ctx.run_id,

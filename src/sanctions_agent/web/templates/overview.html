@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block subtitle %}<div class="sub">Live status of every official list and enrichment source. Updates as runs progress.</div>{% endblock %}
+{% block actions %}<span class="sub" id="snapshot-info"></span>{% endblock %}
+{% block content %}
+<section class="kpis" id="kpis"></section>
+<div class="card">
+  <div class="row"><h2>Sources</h2><span class="spacer"></span><span class="sub" id="updated-at"></span></div>
+  <div class="table-wrap"><table id="sources-table"><thead><tr>
+    <th>Source</th><th>Health</th><th class="num">Since success</th><th class="num">Since change</th>
+    <th>Breaker</th><th class="num">Records</th><th>Version</th><th>Next due</th><th>Active run</th>
+  </tr></thead><tbody></tbody></table></div>
+</div>
+<div class="grid two" style="margin-top:16px">
+  <div class="card"><h2>Open incidents</h2><div id="incidents"></div></div>
+  <div class="card"><h2>Supervisor agent — last cycle</h2><div id="agent-last"></div></div>
+</div>
+{% endblock %}

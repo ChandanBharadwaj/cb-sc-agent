@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block subtitle %}<div class="sub">Runs in progress update live (Server-Sent Events). Click a run for steps, evidence and validation.</div>{% endblock %}
+{% block content %}
+<div class="card"><h2>In progress</h2><div id="live-runs"><div class="empty">No runs in progress.</div></div></div>
+<div class="card">
+  <div class="row" style="margin-bottom:10px"><h2 style="margin:0">History</h2><span class="spacer"></span>
+    <select id="f-source"><option value="">All sources</option></select>
+    <select id="f-status"><option value="">All statuses</option>
+      <option>SUCCEEDED</option><option>NO_CHANGE</option><option>FAILED</option><option>QUARANTINED</option>
+      <option>HELD</option><option>DRY_RUN_OK</option><option>CANCELLED</option><option>ABANDONED</option></select>
+  </div>
+  <div class="table-wrap"><table id="runs-table"><thead><tr>
+    <th>Queued</th><th>Source</th><th>Kind</th><th>Trigger</th><th>By</th><th>Status</th>
+    <th class="num">Duration</th><th class="num">+ / ~ / −</th><th>Error</th></tr></thead><tbody></tbody></table></div>
+</div>
+{% endblock %}

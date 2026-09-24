@@ -331,7 +331,9 @@ def fetch_with_retry(
     raise last
 
 
-def retry_call[T](fn: Callable[[], T], policy: RetryPolicy, *, sleep: Callable[[float], None] = time.sleep) -> T:
+def retry_call[T](
+    fn: Callable[[], T], policy: RetryPolicy, *, sleep: Callable[[float], None] = time.sleep
+) -> T:
     """Generic retry for API calls that raise FetchError (same retryable classes as downloads)."""
     for attempt in range(1, policy.max_attempts + 1):
         try:

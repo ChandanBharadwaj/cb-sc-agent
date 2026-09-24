@@ -6,6 +6,7 @@ reviewable. ``tx(actor=...)`` sets ``sanctions.actor`` for the audit trigger.
 
 from __future__ import annotations
 
+import atexit
 import json
 import threading
 from collections.abc import Iterator, Sequence
@@ -49,6 +50,7 @@ def get_pool() -> ConnectionPool:
                     open=True,
                     name="sanctions",
                 )
+                atexit.register(close_pool)
     return _pool
 
 

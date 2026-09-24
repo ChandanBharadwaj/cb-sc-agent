@@ -430,3 +430,43 @@ def test_cross_list_keys_link_un_uk_eu(seeded):
             " ORDER BY source_id",
         )
         assert [r["source_id"] for r in imo] == ["ofac_sdn", "uk_fcdo"]
+
+
+def test_reparse_does_not_touch_politeness_or_freshness_but_manual_load_is_fresh(seeded):
+    from tests.helpers import load_fixture
+
+    with tx() as conn:
+        conn.execute(
+            "UPDATE source SET last_attempt_at = now() - interval '3 days', last_success_at = now() - interval '3 days'"
+            " WHERE source_id = 'un_sc'"
+        )
+    _, status, _ = load_fixture("un_sc", "un/consolidated_v1.xml")  # re-parse of archived bytes
+    assert status == "SUCCEEDED"
+    with tx() as conn:
+        s = fetch_one(
+            conn,
+            "SELECT now() - last_attempt_at AS a, now() - last_success_at AS s FROM source"
+            " WHERE source_id = 'un_sc'",
+        )
+        assert s["a"].days >= 2 and s["s"].days >= 2  # publisher not contacted, data not new
+    _, status, _ = load_fixture(
+        "un_sc", "un/consolidated_v2.xml", manual_load=True
+    )  # out-of-band file (NFR-08)
+    assert status == "SUCCEEDED"
+    with tx() as conn:
+        s = fetch_one(
+            conn,
+            "SELECT now() - last_attempt_at AS a, now() - last_success_at AS s FROM source"
+            " WHERE source_id = 'un_sc'",
+        )
+        assert s["a"].days >= 2 and s["s"].total_seconds() < 60
+
+
+@respx.mock
+def test_fetch_records_publisher_contact_before_download_finishes(seeded):
+    serve_un(b"", status=503)
+    run_once("un_sc", runner=runner())
+    with tx() as conn:
+        assert fetch_val(
+            conn, "SELECT now() - last_attempt_at < interval '1 minute' FROM source WHERE source_id = 'un_sc'"
+        )

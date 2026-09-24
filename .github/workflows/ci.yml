@@ -24,7 +24,9 @@ jobs:
         with:
           python-version: "3.13"
       - run: uv sync --frozen
-      - run: uv run ruff check src tests
-      - run: uv run ruff format --check src tests
+      - run: uv run ruff check src tests scripts
+      - run: uv run ruff format --check src tests scripts
       - run: uv run mypy
+      - run: uv run playwright install --with-deps chromium   # console smoke tests (tests/ui)
+      - run: node --check src/sanctions_agent/web/static/app.js
       - run: uv run pytest -q

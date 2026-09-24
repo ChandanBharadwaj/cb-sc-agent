@@ -453,9 +453,8 @@ def publish_version(
     snap = create_snapshot(conn, trigger_version_id=version_id, note=f"{source_id} seq {seq} published")
     summary["snapshot_id"] = snap
     conn.execute(
-        """UPDATE source SET current_version_id = %s, last_change_at = now(), last_success_at = now(),
-               consecutive_failures = 0, breaker_state = 'CLOSED', breaker_opened_at = NULL, breaker_retry_at = NULL
-           WHERE source_id = %s""",
+        # freshness / breaker bookkeeping is done by source_state.on_success (a re-parse is not fresh data)
+        "UPDATE source SET current_version_id = %s, last_change_at = now() WHERE source_id = %s",
         (version_id, source_id),
     )
     return summary

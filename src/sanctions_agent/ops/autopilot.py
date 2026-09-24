@@ -68,8 +68,13 @@ def enqueue_guarded(
     s = src[0]
     if system_settings.maintenance_on(conn):
         return {"ok": False, "why": "maintenance mode is on"}
-    if s["status"] != "ACTIVE":
-        return {"ok": False, "why": f"source is {s['status']}"}
+    dry_run_draft = s["status"] == "DRAFT" and bool((options or {}).get("dry_run"))
+    if s["status"] != "ACTIVE" and not dry_run_draft:
+        return {
+            "ok": False,
+            "why": f"source is {s['status']}"
+            + (" (a DRAFT source can only be dry-run)" if s["status"] == "DRAFT" else ""),
+        }
     now = datetime.now(UTC)
     if not ignore_min_interval and s["last_attempt_at"] and now - s["last_attempt_at"] < s["min_interval"]:
         return {

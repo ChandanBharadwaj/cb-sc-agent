@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block subtitle %}<div class="sub">Ask about ingestion status, progress, fields, counts and data quality. Aggregate answers only — no individual records.</div>{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="chips" id="examples">
+    <span class="chip">Which sources are stale or failing right now?</span>
+    <span class="chip">What's the DOB fill rate for UN individuals?</span>
+    <span class="chip">Which lists carry MMSI numbers?</span>
+    <span class="chip">How many vessels were added across lists in the last 7 days?</span>
+    <span class="chip">What data-quality issues are open for the UK list?</span>
+    <span class="chip">Why did the last EU FSF run fail?</span>
+  </div>
+  <div class="chat" id="chat" style="margin-top:14px"></div>
+  <form class="ask-bar" id="ask-form"><input id="ask-input" placeholder="Ask a question…" maxlength="2000" autocomplete="off">
+    <button class="primary" type="submit">Ask</button></form>
+</div>
+{% endblock %}

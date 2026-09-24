@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block subtitle %}<div class="sub">Admin only. Every change is audited.</div>{% endblock %}
+{% block content %}
+<div class="grid two">
+  <div class="card"><h2>Maintenance mode</h2>
+    <p class="sub">Stops all new pulls (scheduled, agent and watchdog). Runs already in progress finish.</p>
+    <label class="row"><input type="checkbox" id="m-on"> Maintenance mode on</label>
+    <label class="field">Reason <input id="m-reason"></label>
+    <div class="row" style="margin-top:8px"><span class="spacer"></span><button class="primary" id="m-save">Save</button></div></div>
+  <div class="card"><h2>Supervisor agent</h2>
+    <label class="row"><input type="checkbox" id="a-on"> Agent enabled (off = deterministic autopilot only)</label>
+    <div class="form-grid" style="margin-top:8px">
+      <label class="field">Model <input id="a-model"></label>
+      <label class="field">Reasoning effort <select id="a-effort"><option>minimal</option><option>low</option><option>medium</option><option>high</option></select></label>
+      <label class="field">Daily budget (USD) <input id="a-budget" type="number" min="0" step="0.5"></label>
+      <label class="field">Health review every (min) <input id="a-review" type="number" min="15"></label>
+    </div>
+    <div class="row" style="margin-top:8px"><span class="spacer"></span><button class="primary" id="a-save">Save</button></div></div>
+  <div class="card"><h2>Alerts</h2>
+    <div class="row"><label><input type="checkbox" data-ch="log"> Log</label><label><input type="checkbox" data-ch="webhook"> Webhook</label><label><input type="checkbox" data-ch="email"> Email</label></div>
+    <div class="form-grid" style="margin-top:8px">
+      <label class="field">Re-alert open PAGE incidents every (min) <input id="al-page" type="number" min="5"></label>
+      <label class="field">Re-alert disabled core list every (h) <input id="al-core" type="number" min="1"></label>
+    </div>
+    <div class="row" style="margin-top:8px"><span class="spacer"></span><button class="primary" id="al-save">Save</button></div></div>
+</div>
+<p class="ok-text" id="set-ok"></p><p class="error" id="set-error"></p>
+{% endblock %}

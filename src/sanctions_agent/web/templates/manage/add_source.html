@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block subtitle %}<div class="sub">New sources reuse an existing adapter type (a new file format needs a parser in code). They start as DRAFT, can be dry-run, and need a second admin to activate.</div>{% endblock %}
+{% block content %}
+<div class="card" id="step1"><h2>1. Adapter type</h2><div class="form-grid" id="types"></div></div>
+<div class="card hidden" id="step2"><h2>2. Details</h2>
+  <div class="form-grid">
+    <label class="field">Source id (lowercase, a-z0-9_) <input id="n-id" pattern="[a-z][a-z0-9_]{1,62}"></label>
+    <label class="field">Display name <input id="n-name"></label>
+    <label class="field">Every (minutes) <input id="n-cadence" type="number" value="240"></label>
+    <label class="field">Politeness interval (min) <input id="n-min" type="number" value="60"></label>
+    <label class="field">Priority <input id="n-priority" type="number" min="1" max="9" value="5"></label>
+    <label class="field">Licence <input id="n-licence"></label>
+  </div>
+  <label class="row" style="margin:10px 0"><input type="checkbox" id="n-core"> Core list (disabling needs an admin and raises a standing alert)</label>
+  <label class="field">Configuration (JSON) <textarea id="n-config" spellcheck="false"></textarea></label>
+  <label class="field">Reason <input id="n-reason"></label>
+  <div class="row" style="margin-top:10px"><span class="error" id="n-error"></span><span class="spacer"></span><button class="primary" id="n-create">Create as DRAFT</button></div>
+</div>
+<div class="card hidden" id="step3"><h2>3. Dry run and activation</h2>
+  <p class="sub">A dry run fetches, archives, validates and parses into staging — it never publishes.</p>
+  <div class="row"><button id="n-dry">Start dry run</button><button class="primary" id="n-activate">Request activation</button><span id="n-status" class="sub"></span></div>
+  <div id="n-run" style="margin-top:10px"></div>
+</div>
+{% endblock %}

@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block subtitle %}<div class="sub">Every cycle, tool call, guard decision, token and dollar is recorded.</div>{% endblock %}
+{% block content %}
+<div class="grid two">
+  <div class="card"><div class="card-head"><h2>LLM spend per day (USD)</h2>
+    <button class="view-toggle" data-toggle="cost">Table view</button></div>
+    <div class="chart-box" id="cost-chart-box"><canvas id="cost-chart"></canvas></div><div class="table-wrap hidden" id="cost-table"></div></div>
+  <div class="card"><h2>Selected cycle</h2><div id="cycle-detail"><div class="empty">Click a cycle to see its tool calls.</div></div></div>
+</div>
+<div class="card"><h2>Cycles</h2><div class="table-wrap"><table id="cycles-table"><thead><tr><th>Started</th><th>Agent</th>
+  <th>Trigger</th><th>Status</th><th class="num">Tool calls</th><th class="num">Denied</th><th class="num">Tokens in/out</th>
+  <th class="num">Cost</th><th>Summary</th></tr></thead><tbody></tbody></table></div></div>
+{% endblock %}

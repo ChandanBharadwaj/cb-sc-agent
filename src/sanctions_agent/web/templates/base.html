@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title }} · Sanctions ingestion</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body data-page="{{ page }}" data-role="{{ user.role }}" data-user="{{ user.user }}"
+      {% if source_id is defined %}data-source-id="{{ source_id }}"{% endif %}
+      {% if run_id is defined %}data-run-id="{{ run_id }}"{% endif %}>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand"><span class="dot"></span>Sanctions ingestion</div>
+    <nav class="nav">
+      <div class="sep">Operations</div>
+      <a href="/ui" class="{{ 'active' if page == 'overview' }}">Overview</a>
+      <a href="/ui/runs" class="{{ 'active' if page == 'runs' }}">Runs &amp; progress</a>
+      <a href="/ui/quality" class="{{ 'active' if page == 'quality' }}">Data quality</a>
+      <a href="/ui/enrichment" class="{{ 'active' if page == 'enrichment' }}">Enrichment &amp; evidence</a>
+      <a href="/ui/agent" class="{{ 'active' if page == 'agent' }}">Agent activity</a>
+      <a href="/ui/review" class="{{ 'active' if page == 'review' }}">Review queue</a>
+      <a href="/ui/ask" class="{{ 'active' if page == 'ask' }}">Ask the agent</a>
+      <div class="sep">Management</div>
+      <a href="/ui/manage" class="{{ 'active' if page == 'manage' }}">Sources &amp; schedules</a>
+      <a href="/ui/manage/settings">Global settings</a>
+    </nav>
+    <div class="who">Signed in as <strong>{{ user.user }}</strong><br>Role: {{ user.role }}</div>
+  </aside>
+  <main>
+    <div id="banners"></div>
+    <div class="page-head">
+      <div><h1>{{ title }}</h1>{% block subtitle %}{% endblock %}</div>
+      <div class="row">{% block actions %}{% endblock %}</div>
+    </div>
+    {% block content %}{% endblock %}
+  </main>
+</div>
+<script src="/static/vendor/chart.umd.min.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>
