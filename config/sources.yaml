@@ -1,0 +1,325 @@
+# Seed source definitions. Imported into the database with `sanctions-agent sources import`.
+# After import the DATABASE is the live configuration (edited in the management UI, versioned, audited);
+# re-importing never overwrites UI edits unless `--overwrite` is given.
+#
+# Fill-rate floors start conservatively below the rates measured in the BRD (section 10.2) and should
+# be re-calibrated from live files ("suggest from last N versions" in the UI, or `verify-sources`).
+# Cadences follow NFR-02.
+
+sources:
+  # =========================== Level 1: official lists =========================================
+  - source_id: ofac_sdn
+    display_name: OFAC SDN List (Advanced XML)
+    adapter_type: ofac_advanced_xml
+    is_core: true
+    status: ACTIVE
+    schedule: {kind: INTERVAL, cadence_minutes: 120, min_interval_minutes: 30, warn_staleness_hours: 6, hard_max_staleness_hours: 12}
+    priority: 1
+    licence: US federal data - public domain
+    config:
+      fetch:
+        url: https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/SDN_ADVANCED.XML
+        allowed_hosts: [sanctionslistservice.ofac.treas.gov]
+        timeout_s: 300
+        max_mb: 600
+      validation:
+        min_records: 5000
+        fill_floors: {PERSON.dob: 0.90, PERSON.nationality: 0.55, ORGANIZATION.country: 0.90, VESSEL.imo: 0.95}
+        schema_file: ofac/ADVANCED_XML.xsd
+
+  - source_id: ofac_cons
+    display_name: OFAC Consolidated (non-SDN) List (Advanced XML)
+    adapter_type: ofac_advanced_xml
+    is_core: true
+    status: ACTIVE
+    schedule: {kind: INTERVAL, cadence_minutes: 120, min_interval_minutes: 30, warn_staleness_hours: 6, hard_max_staleness_hours: 12}
+    priority: 2
+    licence: US federal data - public domain
+    config:
+      fetch:
+        url: https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/CONS_ADVANCED.XML
+        allowed_hosts: [sanctionslistservice.ofac.treas.gov]
+      validation:
+        min_records: 50
+        max_removed_abs: 20
+        schema_file: ofac/ADVANCED_XML.xsd
+
+  - source_id: un_sc
+    display_name: UN Security Council Consolidated List
+    adapter_type: un_consolidated_xml
+    is_core: true
+    status: ACTIVE
+    schedule: {kind: INTERVAL, cadence_minutes: 240, min_interval_minutes: 60, warn_staleness_hours: 8, hard_max_staleness_hours: 12}
+    priority: 1
+    licence: "UN website terms (personal, non-commercial) - Legal review pending (BRD Q5)"
+    licence_status: LEGAL_REVIEW_REQUIRED
+    config:
+      fetch:
+        url: https://scsanctions.un.org/resources/xml/en/consolidated.xml
+        allowed_hosts: [scsanctions.un.org, "*.blob.core.windows.net"]
+        conditional_get: false   # signed redirect URLs must not be cached
+      validation:
+        min_records: 800
+        max_removed_abs: 25
+        max_added_abs: 200       # single-day re-listings of 121 entries have happened
+        fill_floors: {PERSON.dob: 0.85, PERSON.nationality: 0.75}
+        schema_file: un/consolidated.xsd
+
+  - source_id: uk_fcdo
+    display_name: UK Sanctions List (FCDO)
+    adapter_type: uk_fcdo_xml
+    is_core: true
+    status: ACTIVE
+    schedule: {kind: INTERVAL, cadence_minutes: 120, min_interval_minutes: 30, warn_staleness_hours: 6, hard_max_staleness_hours: 12}
+    priority: 1
+    licence: Open Government Licence v3.0
+    config:
+      fetch:
+        url: https://sanctionslist.fcdo.gov.uk/docs/UK-Sanctions-List.xml
+        allowed_hosts: [sanctionslist.fcdo.gov.uk]
+      validation:
+        min_records: 3000
+        fill_floors: {PERSON.dob: 0.80}
+        schema_file: uk/UK-Sanctions-List.xsd
+
+  - source_id: eu_fsf
+    display_name: EU Financial Sanctions File (FSF)
+    adapter_type: eu_fsf_xml
+    is_core: true
+    status: ACTIVE
+    schedule: {kind: INTERVAL, cadence_minutes: 120, min_interval_minutes: 30, warn_staleness_hours: 6, hard_max_staleness_hours: 12}
+    priority: 1
+    licence: European Commission reuse policy (attribution)
+    licence_status: ATTRIBUTION_REQUIRED
+    config:
+      fetch:
+        url: https://webgate.ec.europa.eu/fsd/fsf/public/files/xmlFullSanctionsList_1_1/content?token=dG9rZW4tMjAxNw
+        allowed_hosts: [webgate.ec.europa.eu]
+        retry: {max_attempts: 7, base_delay_s: 30, max_delay_s: 900}   # FSF sends bursts of HTTP 500
+      validation:
+        min_records: 3000
+        fill_floors: {PERSON.dob: 0.75, ORGANIZATION.country: 0.55}
+        schema_file: eu/xmlFullSanctionsList_1_1.xsd
+
+  - source_id: us_csl
+    display_name: US Consolidated Screening List (BIS / State lists)
+    adapter_type: us_csl_json
+    is_core: true
+    status: ACTIVE
+    schedule: {kind: INTERVAL, cadence_minutes: 360, min_interval_minutes: 60, warn_staleness_hours: 30, hard_max_staleness_hours: 36}
+    priority: 2
+    licence: US federal data - public domain (CSL is explicitly non-authoritative)
+    config:
+      fetch:
+        url: https://data.trade.gov/downloadable_consolidated_screening_list/v1/consolidated.json
+        allowed_hosts: [data.trade.gov]
+      include_list_codes: [EL, DPL, UVL, MEU, DTC, ISN]
+      validation:
+        min_records: 1000
+        schema_file: csl/consolidated.schema.json
+
+  - source_id: eu_annex_xlii
+    display_name: "EU Reg. 833/2014 Annex XLII - banned vessels (curated)"
+    adapter_type: eu_annex_curated
+    is_core: true
+    status: ACTIVE
+    schedule: {kind: INTERVAL, cadence_minutes: 360, min_interval_minutes: 60, warn_staleness_hours: 48, hard_max_staleness_hours: 72}
+    priority: 3
+    licence: European Commission reuse policy (attribution)
+    licence_status: ATTRIBUTION_REQUIRED
+    config:
+      annex: XLII
+      regulation_celex: 32014R0833
+      validation: {min_records: 0, max_removed_abs: 5, fill_floors: {VESSEL.imo: 0.99}}
+
+  - source_id: eu_annex_iv
+    display_name: "EU Reg. 833/2014 Annex IV - export-restricted entities (curated)"
+    adapter_type: eu_annex_curated
+    is_core: true
+    status: ACTIVE
+    schedule: {kind: INTERVAL, cadence_minutes: 360, min_interval_minutes: 60, warn_staleness_hours: 48, hard_max_staleness_hours: 72}
+    priority: 3
+    licence: European Commission reuse policy (attribution)
+    licence_status: ATTRIBUTION_REQUIRED
+    config:
+      annex: IV
+      regulation_celex: 32014R0833
+      validation: {min_records: 0, max_removed_abs: 5}
+
+  # =========================== Level 2: official notices ========================================
+  - source_id: fr_notices
+    display_name: Federal Register (OFAC + BIS documents)
+    adapter_type: federal_register
+    status: ACTIVE
+    schedule: {kind: INTERVAL, cadence_minutes: 60, min_interval_minutes: 30, warn_staleness_hours: 12, hard_max_staleness_hours: 48}
+    priority: 4
+    licence: US federal data - public domain
+    config:
+      base_url: https://www.federalregister.gov/api/v1/documents.json
+      allowed_hosts: [www.federalregister.gov]
+      lookback_days: 14
+      params: {"conditions[agencies][]": [foreign-assets-control-office, industry-and-security-bureau]}
+      signal_for: [ofac_sdn, ofac_cons, us_csl]
+
+  - source_id: ofac_recent_actions
+    display_name: OFAC Recent Actions
+    adapter_type: ofac_recent_actions
+    status: ACTIVE
+    schedule: {kind: INTERVAL, cadence_minutes: 120, min_interval_minutes: 30, warn_staleness_hours: 12, hard_max_staleness_hours: 48}
+    priority: 4
+    licence: US federal data - public domain
+    config:
+      base_url: https://ofac.treasury.gov/recent-actions
+      allowed_hosts: [ofac.treasury.gov, home.treasury.gov]
+      lookback_days: 14
+      signal_for: [ofac_sdn, ofac_cons]
+
+  - source_id: un_list_updates
+    display_name: UN SC Consolidated List - updates log
+    adapter_type: un_list_updates
+    status: ACTIVE
+    schedule: {kind: INTERVAL, cadence_minutes: 240, min_interval_minutes: 60, warn_staleness_hours: 24, hard_max_staleness_hours: 72}
+    priority: 4
+    licence: "UN website terms - Legal review pending (BRD Q5)"
+    licence_status: LEGAL_REVIEW_REQUIRED
+    config:
+      base_url: https://main.un.org/securitycouncil/en/content/list-updates-unsc-consolidated-list
+      allowed_hosts: [main.un.org]
+      lookback_days: 30
+      signal_for: [un_sc]
+
+  - source_id: uk_notices
+    display_name: gov.uk financial sanctions notices
+    adapter_type: uk_sanctions_notices
+    status: ACTIVE
+    schedule: {kind: INTERVAL, cadence_minutes: 120, min_interval_minutes: 30, warn_staleness_hours: 24, hard_max_staleness_hours: 72}
+    priority: 4
+    licence: Open Government Licence v3.0
+    config:
+      base_url: https://www.gov.uk/api/search.json
+      allowed_hosts: [www.gov.uk]
+      lookback_days: 14
+      params: {q: "financial sanctions notice", order: "-public_timestamp", count: "50"}
+      signal_for: [uk_fcdo]
+
+  - source_id: eurlex_oj
+    display_name: EUR-Lex Official Journal (L series) - sanctions acts
+    adapter_type: eurlex_oj_rss
+    status: ACTIVE
+    schedule: {kind: INTERVAL, cadence_minutes: 30, min_interval_minutes: 15, warn_staleness_hours: 12, hard_max_staleness_hours: 48}
+    priority: 3
+    licence: European Commission reuse policy (attribution)
+    licence_status: ATTRIBUTION_REQUIRED
+    config:
+      base_url: https://eur-lex.europa.eu/EN/display-feed.rss?rssId=222
+      allowed_hosts: [eur-lex.europa.eu, publications.europa.eu]
+      keywords: ["restrictive measures", "833/2014", "269/2014", "sanctions"]
+      signal_for: [eu_fsf, eu_annex_xlii, eu_annex_iv]
+
+  - source_id: eu_fsf_rss
+    display_name: EU FSF RSS (early-pull signal)
+    adapter_type: rss_signal
+    status: ACTIVE
+    schedule: {kind: INTERVAL, cadence_minutes: 30, min_interval_minutes: 15, warn_staleness_hours: 12, hard_max_staleness_hours: 48}
+    priority: 3
+    licence: European Commission reuse policy
+    config:
+      base_url: https://webgate.ec.europa.eu/fsd/fsf/public/rss
+      allowed_hosts: [webgate.ec.europa.eu]
+      signal_for: [eu_fsf]
+
+  # =========================== Level 2: free enrichment =========================================
+  - source_id: gleif
+    display_name: GLEIF (LEI, legal form, parents)
+    adapter_type: gleif
+    status: ACTIVE
+    schedule: {kind: INTERVAL, cadence_minutes: 1440, min_interval_minutes: 60, warn_staleness_hours: 72, hard_max_staleness_hours: 168}
+    priority: 6
+    licence: CC0 1.0
+    config:
+      base_url: https://api.gleif.org/api/v1
+      allowed_hosts: [api.gleif.org]
+      rate_limit_calls: 55
+      rate_limit_window_s: 60
+      batch_size: 500
+      subject_sources: [ofac_sdn, ofac_cons, un_sc, uk_fcdo, eu_fsf, us_csl, eu_annex_iv]
+      entity_types: [ORGANIZATION]
+
+  - source_id: companies_house
+    display_name: UK Companies House (company profiles)
+    adapter_type: companies_house
+    status: ACTIVE
+    schedule: {kind: INTERVAL, cadence_minutes: 1440, min_interval_minutes: 60, warn_staleness_hours: 72, hard_max_staleness_hours: 168}
+    priority: 6
+    licence: Open Government Licence v3.0
+    config:
+      base_url: https://api.company-information.service.gov.uk
+      allowed_hosts: [api.company-information.service.gov.uk]
+      rate_limit_calls: 550
+      rate_limit_window_s: 300
+      batch_size: 300
+      subject_sources: [uk_fcdo, ofac_sdn, eu_fsf, un_sc]
+      entity_types: [ORGANIZATION]
+      personal_data_on_demand_only: true
+
+  - source_id: faa_registry
+    display_name: FAA aircraft registry
+    adapter_type: faa_registry
+    status: ACTIVE
+    schedule: {kind: INTERVAL, cadence_minutes: 1440, min_interval_minutes: 360, warn_staleness_hours: 72, hard_max_staleness_hours: 168}
+    priority: 7
+    licence: US federal data - public domain
+    config:
+      base_url: https://registry.faa.gov
+      download_url: https://registry.faa.gov/database/ReleasableAircraft.zip
+      allowed_hosts: [registry.faa.gov]
+      subject_sources: [ofac_sdn, ofac_cons]
+      entity_types: [AIRCRAFT]
+
+  - source_id: wikidata
+    display_name: Wikidata (vessels by IMO, organisations)
+    adapter_type: wikidata
+    status: ACTIVE
+    schedule: {kind: INTERVAL, cadence_minutes: 10080, min_interval_minutes: 360, warn_staleness_hours: 336, hard_max_staleness_hours: 720}
+    priority: 8
+    licence: CC0 1.0
+    config:
+      base_url: https://query.wikidata.org/sparql
+      allowed_hosts: [query.wikidata.org]
+      rate_limit_calls: 30
+      rate_limit_window_s: 60
+      batch_size: 400
+      subject_sources: [ofac_sdn, uk_fcdo, eu_annex_xlii, un_sc]
+      entity_types: [VESSEL, ORGANIZATION]
+      personal_data_on_demand_only: true
+
+  - source_id: icij
+    display_name: ICIJ Offshore Leaks (leads only)
+    adapter_type: icij_offshore_leaks
+    status: DISABLED
+    status_reason: "ODbL share-alike licence - enable only after Legal sign-off (NFR-06)"
+    schedule: {kind: INTERVAL, cadence_minutes: 43200, min_interval_minutes: 1440, warn_staleness_hours: 1440, hard_max_staleness_hours: 2160}
+    priority: 9
+    licence: ODbL 1.0 / CC BY-SA (share-alike)
+    licence_status: LEGAL_REVIEW_REQUIRED
+    config:
+      base_url: https://offshoreleaks-data.icij.org
+      download_url: https://offshoreleaks-data.icij.org/offshoreleaks/csv/full-oldb.LATEST.zip
+      allowed_hosts: [offshoreleaks-data.icij.org]
+      subject_sources: [ofac_sdn, uk_fcdo, eu_fsf]
+      entity_types: [ORGANIZATION]
+      auto_accept_score: 1.0   # never auto-accept: leads only
+
+  - source_id: internal_ais
+    display_name: Internal AIS / vessel master (stub)
+    adapter_type: internal_ais
+    status: DISABLED
+    status_reason: "Interface stub - connect to the internal vessel data service"
+    schedule: {kind: INTERVAL, cadence_minutes: 1440, min_interval_minutes: 60, warn_staleness_hours: 72, hard_max_staleness_hours: 168}
+    priority: 9
+    licence: Internal
+    config:
+      base_url: https://example.invalid/ais
+      allowed_hosts: [example.invalid]
+      subject_sources: [ofac_sdn, uk_fcdo, eu_annex_xlii]
+      entity_types: [VESSEL]

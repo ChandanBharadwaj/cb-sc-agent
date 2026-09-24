@@ -38,7 +38,7 @@ def configure_logging(level: str = "INFO", json: bool = True) -> None:
 
 
 def get_logger(name: str | None = None) -> structlog.stdlib.BoundLogger:
-    return structlog.get_logger(name)  # type: ignore[no-any-return]
+    return structlog.get_logger(name)  # type: ignore[no-any-return,unused-ignore]
 
 
 @contextmanager

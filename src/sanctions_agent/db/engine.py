@@ -62,23 +62,28 @@ def reset_pool_for_tests() -> None:
 @contextmanager
 def tx(actor: str | None = None) -> Iterator[psycopg.Connection[Row]]:
     """A transaction: commits on success, rolls back on exception."""
-    with get_pool().connection() as conn:
-        with conn.transaction():
-            if actor:
-                conn.execute("SELECT set_config('sanctions.actor', %s, true)", (actor,))
-            yield conn  # type: ignore[misc]
+    with get_pool().connection() as conn, conn.transaction():
+        if actor:
+            conn.execute("SELECT set_config('sanctions.actor', %s, true)", (actor,))
+        yield conn  # type: ignore[misc]
 
 
-def fetch_all(conn: psycopg.Connection[Any], sql: str, params: Sequence[Any] | dict[str, Any] | None = None) -> list[Row]:
-    return list(conn.execute(sql, params).fetchall())  # type: ignore[arg-type]
+def fetch_all(
+    conn: psycopg.Connection[Any], sql: str, params: Sequence[Any] | dict[str, Any] | None = None
+) -> list[Row]:
+    return list(conn.execute(sql, params).fetchall())
 
 
-def fetch_one(conn: psycopg.Connection[Any], sql: str, params: Sequence[Any] | dict[str, Any] | None = None) -> Row | None:
-    return conn.execute(sql, params).fetchone()  # type: ignore[arg-type, no-any-return]
+def fetch_one(
+    conn: psycopg.Connection[Any], sql: str, params: Sequence[Any] | dict[str, Any] | None = None
+) -> Row | None:
+    return conn.execute(sql, params).fetchone()
 
 
-def fetch_val(conn: psycopg.Connection[Any], sql: str, params: Sequence[Any] | dict[str, Any] | None = None) -> Any:
-    row = conn.execute(sql, params).fetchone()  # type: ignore[arg-type]
+def fetch_val(
+    conn: psycopg.Connection[Any], sql: str, params: Sequence[Any] | dict[str, Any] | None = None
+) -> Any:
+    row = conn.execute(sql, params).fetchone()
     if row is None:
         return None
     return next(iter(row.values())) if isinstance(row, dict) else row[0]

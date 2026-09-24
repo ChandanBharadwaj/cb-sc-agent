@@ -13,7 +13,9 @@ def _seed_source(conn) -> None:
 
 def test_raw_artifact_is_append_only(db):
     with tx() as conn:
-        conn.execute("INSERT INTO raw_artifact (sha256, blob_uri, size_bytes) VALUES (%s, 'x', 1)", ("a" * 64,))
+        conn.execute(
+            "INSERT INTO raw_artifact (sha256, blob_uri, size_bytes) VALUES (%s, 'x', 1)", ("a" * 64,)
+        )
     with pytest.raises(psycopg.errors.InsufficientPrivilege), tx() as conn:
         conn.execute("UPDATE raw_artifact SET size_bytes = 2")
     with pytest.raises(psycopg.errors.InsufficientPrivilege), tx() as conn:

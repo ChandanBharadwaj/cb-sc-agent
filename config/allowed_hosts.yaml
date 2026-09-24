@@ -1,0 +1,46 @@
+# Global outbound host allow-list (NFR-03 / NFR-09).
+#
+# Deployment configuration: changed by code review + deploy, NOT from the UI. Every source's own
+# `allowed_hosts` must be a subset of this list, and every redirect hop is checked against both.
+hosts:
+  # ---- Level 1: official lists ----------------------------------------------------------------
+  - host: sanctionslistservice.ofac.treas.gov
+    purpose: OFAC SLS downloads (SDN / Consolidated Advanced XML)
+  - host: scsanctions.un.org
+    purpose: UN SC Consolidated List (redirects to a short-lived Azure blob URL)
+  - host: "*.blob.core.windows.net"
+    purpose: UN SC signed download redirect target (never cached)
+  - host: sanctionslist.fcdo.gov.uk
+    purpose: UK Sanctions List (FCDO)
+  - host: webgate.ec.europa.eu
+    purpose: EU Financial Sanctions File + RSS
+  - host: data.trade.gov
+    purpose: US Consolidated Screening List bulk files
+  - host: www.sanctionsmap.eu
+    purpose: EU Sanctions Map (annex members, vessels) - leads only, not authoritative
+  # ---- Level 2: official notices --------------------------------------------------------------
+  - host: www.federalregister.gov
+    purpose: Federal Register API
+  - host: ofac.treasury.gov
+    purpose: OFAC Recent Actions
+  - host: home.treasury.gov
+    purpose: Treasury press releases (listing reasons)
+  - host: main.un.org
+    purpose: UN list-updates log and narrative summaries
+  - host: www.gov.uk
+    purpose: gov.uk search / content API (UK notices)
+  - host: eur-lex.europa.eu
+    purpose: EUR-Lex OJ RSS and act texts
+  - host: publications.europa.eu
+    purpose: EU Publications Office (Cellar) act downloads
+  # ---- Level 2: enrichment --------------------------------------------------------------------
+  - host: api.gleif.org
+    purpose: GLEIF API
+  - host: api.company-information.service.gov.uk
+    purpose: UK Companies House API
+  - host: registry.faa.gov
+    purpose: FAA releasable aircraft database
+  - host: query.wikidata.org
+    purpose: Wikidata SPARQL endpoint
+  - host: offshoreleaks-data.icij.org
+    purpose: ICIJ Offshore Leaks bulk download (disabled by default - licence review)

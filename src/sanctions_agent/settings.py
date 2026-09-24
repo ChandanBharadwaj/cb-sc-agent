@@ -92,7 +92,9 @@ class Settings(BaseSettings):
     # basic: users from ``ui_users`` ("user:password:role,..."); proxy: trust X-Forwarded-User and
     # X-Forwarded-Roles from an SSO gateway; none: everyone is admin (dev only).
     auth_mode: Literal["none", "basic", "proxy"] = "basic"
-    ui_users: SecretStr = SecretStr("admin:admin:admin,ops:ops:operator,review:review:reviewer,view:view:viewer")
+    ui_users: SecretStr = SecretStr(
+        "admin:admin:admin,ops:ops:operator,review:review:reviewer,view:view:viewer"
+    )
     api_host: str = "0.0.0.0"  # noqa: S104 - container default; put behind a reverse proxy
     api_port: int = 8080
 
