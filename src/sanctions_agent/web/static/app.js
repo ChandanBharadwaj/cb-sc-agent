@@ -787,11 +787,17 @@
     banners();
     if (BODY.dataset.runId) { initRunDetail(BODY.dataset.runId); return; }
     const liveRuns = new Map();
+    const endedAt = new Map(); // run_id -> when a terminal event arrived
     const renderLive = () => mount('#live-runs', liveRuns.size ? [...liveRuns.values()].map(liveCard) : el('div', { class: 'empty' }, 'No runs in progress.'));
     const loadLive = async () => {
+      // merge, don't replace: events that arrive while the snapshot is in flight are newer than it
+      const started = Date.now();
       const d = await api('/api/overview');
+      const next = new Map();
+      (d.active_runs || []).forEach((r) => { if (!((endedAt.get(r.run_id) || 0) >= started)) next.set(r.run_id, r); });
+      liveRuns.forEach((r, id) => { if ((r._at || 0) >= started) next.set(id, r); });
       liveRuns.clear();
-      (d.active_runs || []).forEach((r) => liveRuns.set(r.run_id, r));
+      next.forEach((r, id) => liveRuns.set(id, r));
       renderLive();
       const sel = $('#f-source');
       if (sel.options.length <= 1) (d.sources || []).forEach((s) => sel.append(el('option', { value: s.source_id }, s.display_name)));
@@ -819,9 +825,9 @@
     await loadHistory().catch((e) => mount('#runs-table tbody', el('tr', {}, el('td', { colspan: 9 }, errorBox(e)))));
     const refreshHistory = debounce(loadHistory, 1000);
     onProgress((p) => {
-      if (TERMINAL.has(p.status)) { liveRuns.delete(p.run_id); renderLive(); refreshHistory(); return; }
+      if (TERMINAL.has(p.status)) { endedAt.set(p.run_id, Date.now()); liveRuns.delete(p.run_id); renderLive(); refreshHistory(); return; }
       const prev = liveRuns.get(p.run_id) || {};
-      liveRuns.set(p.run_id, { ...prev, ...p, current_step: p.step || prev.current_step });
+      liveRuns.set(p.run_id, { ...prev, ...p, current_step: p.step || prev.current_step, _at: Date.now() });
       if (p.status === 'QUEUED') refreshHistory();
       renderLive();
     }, () => { loadLive().catch(() => {}); refreshHistory(); });

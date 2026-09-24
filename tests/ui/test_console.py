@@ -31,7 +31,9 @@ playwright = pytest.importorskip("playwright.sync_api")
 
 USERS = "admin:a-pass:admin,admin2:a2-pass:admin,op:o-pass:operator"
 ANSWER = {
-    "answer_markdown": "**2 lists** are below a fill-rate floor:\n\n- UK: passport 50% vs 90% floor\n- none elsewhere",
+    "answer_markdown": "**1 list** has a field below its fill-rate floor:\n\n"
+    "- UK Sanctions List: `passport` 50% vs 90% floor - the new file was quarantined, the last good version is live\n"
+    "- OFAC, UN, EU FSF and CSL: all fields at or above their floors",
     "citations": [{"source": "get_fill_rates", "as_of": "2026-09-24T10:00:00Z"}],
     "chart": None,
 }
@@ -56,7 +58,9 @@ def drain() -> list[str]:
     out = []
     with respx.mock(assert_all_called=False) as rx:
         rx.get(UN_URL).mock(return_value=httpx.Response(302, headers={"Location": BLOB}))
-        rx.get(BLOB).mock(return_value=httpx.Response(200, content=(FX / "un/consolidated_v2.xml").read_bytes()))
+        rx.get(BLOB).mock(
+            return_value=httpx.Response(200, content=(FX / "un/consolidated_v2.xml").read_bytes())
+        )
         while True:
             with tx() as conn:
                 row = runs.claim_next(conn, "ui-test", 300)
@@ -84,8 +88,12 @@ def server(seeded, monkeypatch, tmp_path):  # noqa: F811
     app = create_app()
     app.state.analyst_factory = lambda: AnalystAgent(
         model=ScriptedModel(
-            [ModelStep(output=[assistant_message(json.dumps(ANSWER))], usage=Usage(requests=1, input_tokens=500,
-                                                                                    output_tokens=80, total_tokens=580))]
+            [
+                ModelStep(
+                    output=[assistant_message(json.dumps(ANSWER))],
+                    usage=Usage(requests=1, input_tokens=500, output_tokens=80, total_tokens=580),
+                )
+            ]
         )
     )
     port = _free_port()
@@ -108,10 +116,11 @@ def page(server):
     with playwright.sync_playwright() as p:
         try:
             browser = p.chromium.launch(executable_path=exe) if exe else p.chromium.launch()
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             pytest.skip(f"no Chromium available: {e}")
         ctx = browser.new_context(
-            base_url=server, http_credentials={"username": "admin", "password": "a-pass"},
+            base_url=server,
+            http_credentials={"username": "admin", "password": "a-pass"},
             viewport={"width": 1400, "height": 1000},
         )
         pg = ctx.new_page()
@@ -149,13 +158,31 @@ def test_operations_console(page):
     expect(pg.locator("#runs-table")).to_contain_text("uk_fcdo")
     expect(pg.locator("body")).to_have_attribute("data-live", "on")  # SSE stream is listening
     with tx() as conn:
-        run_id = runs.enqueue_run(conn, source_id="un_sc", run_kind="LIST_INGEST", trigger="MANUAL",
-                                  requested_by="admin", reason="ui test")
+        run_id = runs.enqueue_run(
+            conn,
+            source_id="un_sc",
+            run_kind="LIST_INGEST",
+            trigger="MANUAL",
+            requested_by="admin",
+            reason="ui test",
+        )
     card = pg.locator(f'.run-live[data-run-id="{run_id}"]')
     expect(card).to_contain_text("Queued")
     with tx() as conn:
-        notify(conn, "run_progress", json.dumps({"run_id": run_id, "source_id": "un_sc", "status": "RUNNING",
-                                                 "step": "PARSE", "pct": 42, "records_done": 2100}))
+        notify(
+            conn,
+            "run_progress",
+            json.dumps(
+                {
+                    "run_id": run_id,
+                    "source_id": "un_sc",
+                    "status": "RUNNING",
+                    "step": "PARSE",
+                    "pct": 42,
+                    "records_done": 2100,
+                }
+            ),
+        )
     expect(card.locator(".progress")).to_have_attribute("aria-valuenow", "42")
     expect(card.locator(".step.current")).to_have_text("parse")
     expect(card).to_contain_text("2,100 records")
@@ -177,8 +204,9 @@ def test_operations_console(page):
     pg.fill("#ask-input", "Which lists are below a fill-rate floor?")
     pg.click("#ask-form button")
     bot = pg.locator(".msg.bot").last
-    expect(bot).to_contain_text("2 lists")
-    expect(bot.locator("strong")).to_have_text("2 lists")
+    expect(bot).to_contain_text("1 list has a field below")
+    expect(bot.locator("strong")).to_have_text("1 list")
+    expect(bot.locator("code")).to_have_text("passport")
     expect(bot.locator("li")).to_have_count(2)
     expect(bot).to_contain_text("Sources: get_fill_rates")
     pg.fill("#ask-input", "Is Viktor Bout sanctioned?")
@@ -230,8 +258,13 @@ def test_management_console(page):
     expect(pg.locator("#run-head")).to_contain_text("Dry run OK")
     expect(pg.locator("#run-evidence")).to_contain_text("200")
     with tx() as conn:
-        assert fetch_one(conn, "SELECT count(*) AS n FROM list_version WHERE source_id = 'un_sc'"
-                               " AND status = 'PUBLISHED'")["n"] == 1  # dry run never publishes
+        assert (
+            fetch_one(
+                conn,
+                "SELECT count(*) AS n FROM list_version WHERE source_id = 'un_sc' AND status = 'PUBLISHED'",
+            )["n"]
+            == 1
+        )  # dry run never publishes
     shot(pg, "run_detail")
 
     # add-source wizard: DRAFT -> dry run -> request activation

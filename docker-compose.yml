@@ -15,10 +15,12 @@ services:
 
   migrate:
     build: .
-    command: ["sh", "-c", "alembic upgrade head && sanctions-agent sources import"]
+    # schema + analytics views + read-only analyst role, then seed sources (never overwrites UI edits)
+    command: ["sh", "-c", "sanctions-agent db upgrade && sanctions-agent sources import"]
     env_file: [.env]
     environment:
       SANCTIONS_DATABASE_URL: postgresql://sanctions:${POSTGRES_PASSWORD:-sanctions}@postgres:5432/sanctions
+      SANCTIONS_ANALYST_PASSWORD: ${ANALYST_PASSWORD:-sanctions_analyst}
     depends_on:
       postgres: {condition: service_healthy}
 

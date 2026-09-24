@@ -1,0 +1,79 @@
+# Prometheus alerting rules for the sanctions ingestion agent (scrape the API service at /metrics).
+# Thresholds mirror the BRD SLOs (NFR-01/02/04): detect a publisher change within 2 h, publish within 4 h.
+# Per-source thresholds live in the database (warn/page staleness); these rules are the independent backstop
+# in case the supervisor itself is down.
+groups:
+  - name: sanctions-ingestion
+    rules:
+      - alert: SanctionsDatabaseDown
+        expr: sanctions_db_up == 0 or absent(sanctions_db_up)
+        for: 5m
+        labels: {severity: page}
+        annotations:
+          summary: "Sanctions ingestion DB unreachable (or the API is not being scraped)"
+          runbook: docs/runbook.md#database-or-api-down
+
+      - alert: SanctionsCoreListStaleWarning
+        expr: sanctions_source_staleness_seconds{core="true"} > 6 * 3600 and sanctions_source_active == 1
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.source_id }}: no successful run for {{ $value | humanizeDuration }}"
+          runbook: docs/runbook.md#a-source-is-stale
+
+      - alert: SanctionsCoreListStalePage
+        expr: sanctions_source_staleness_seconds{core="true"} > 12 * 3600 and sanctions_source_active == 1
+        for: 5m
+        labels: {severity: page}
+        annotations:
+          summary: "{{ $labels.source_id }}: stale beyond the hard SLO ({{ $value | humanizeDuration }})"
+          runbook: docs/runbook.md#a-source-is-stale
+
+      - alert: SanctionsCoreListNotActive
+        expr: sanctions_source_active{core="true"} == 0
+        for: 30m
+        labels: {severity: warning}
+        annotations:
+          summary: "Core list {{ $labels.source_id }} is paused or disabled - screening coverage reduced"
+          runbook: docs/runbook.md#a-core-list-is-paused-or-disabled
+
+      - alert: SanctionsBreakerOpen
+        expr: sanctions_source_breaker_open == 1
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.source_id }}: circuit breaker open after repeated fetch failures"
+          runbook: docs/runbook.md#circuit-breaker-open--repeated-fetch-failures
+
+      - alert: SanctionsNoChangeTooLong
+        # official lists change at least every few days; a long silence usually means a silent failure
+        expr: (time() - sanctions_source_last_change_timestamp{level="1"}) > 10 * 86400 and sanctions_source_active == 1
+        for: 1h
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.source_id }}: no new version for {{ $value | humanizeDuration }}"
+          runbook: docs/runbook.md#no-change-for-a-long-time
+
+      - alert: SanctionsPageIncidentOpen
+        expr: sanctions_open_incidents{severity="PAGE"} > 0
+        for: 5m
+        labels: {severity: page}
+        annotations:
+          summary: "{{ $value }} page-level ingestion incident(s) open - see the console Overview"
+          runbook: docs/runbook.md#reading-an-incident
+
+      - alert: SanctionsReviewBacklog
+        expr: sum(sanctions_pending_proposals) > 25 or sanctions_held_removals > 20
+        for: 4h
+        labels: {severity: warning}
+        annotations:
+          summary: "Review queue backlog (proposals or held removals) - reviewers needed"
+          runbook: docs/runbook.md#review-backlog
+
+      - alert: SanctionsAgentFallbacks
+        expr: sanctions_agent_fallback_cycles_today > 10
+        for: 30m
+        labels: {severity: info}
+        annotations:
+          summary: "Supervisor agent fell back to autopilot {{ $value }} times today (OpenAI down or budget spent)"
+          runbook: docs/runbook.md#agent-unavailable-or-over-budget
