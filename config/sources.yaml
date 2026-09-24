@@ -17,6 +17,7 @@ sources:
     priority: 1
     licence: US federal data - public domain
     config:
+      alerts: {no_change_alert_days: 7}
       fetch:
         url: https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/SDN_ADVANCED.XML
         allowed_hosts: [sanctionslistservice.ofac.treas.gov]
@@ -36,6 +37,7 @@ sources:
     priority: 2
     licence: US federal data - public domain
     config:
+      alerts: {no_change_alert_days: 30}
       fetch:
         url: https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/CONS_ADVANCED.XML
         allowed_hosts: [sanctionslistservice.ofac.treas.gov]
@@ -54,6 +56,7 @@ sources:
     licence: "UN website terms (personal, non-commercial) - Legal review pending (BRD Q5)"
     licence_status: LEGAL_REVIEW_REQUIRED
     config:
+      alerts: {no_change_alert_days: 45}
       fetch:
         url: https://scsanctions.un.org/resources/xml/en/consolidated.xml
         allowed_hosts: [scsanctions.un.org, "*.blob.core.windows.net"]
@@ -73,6 +76,7 @@ sources:
     priority: 1
     licence: Open Government Licence v3.0
     config:
+      alerts: {no_change_alert_days: 14}
       fetch:
         url: https://sanctionslist.fcdo.gov.uk/docs/UK-Sanctions-List.xml
         allowed_hosts: [sanctionslist.fcdo.gov.uk]
@@ -91,6 +95,7 @@ sources:
     licence: European Commission reuse policy (attribution)
     licence_status: ATTRIBUTION_REQUIRED
     config:
+      alerts: {no_change_alert_days: 14}
       fetch:
         url: https://webgate.ec.europa.eu/fsd/fsf/public/files/xmlFullSanctionsList_1_1/content?token=dG9rZW4tMjAxNw
         allowed_hosts: [webgate.ec.europa.eu]
@@ -109,6 +114,7 @@ sources:
     priority: 2
     licence: US federal data - public domain (CSL is explicitly non-authoritative)
     config:
+      alerts: {no_change_alert_days: 21}
       fetch:
         url: https://data.trade.gov/downloadable_consolidated_screening_list/v1/consolidated.json
         allowed_hosts: [data.trade.gov]

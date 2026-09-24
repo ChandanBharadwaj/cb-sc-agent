@@ -33,6 +33,12 @@ AlertRoute = Literal["log", "webhook", "email"]
 class AlertConfig(_Base):
     routes: list[AlertRoute] = Field(default_factory=lambda: list[AlertRoute](["log", "webhook"]))
     min_severity: Literal["INFO", "WARN", "PAGE"] = "WARN"
+    no_change_alert_days: int | None = Field(
+        None,
+        ge=1,
+        le=365,
+        description="Alert when no new version has been published for this many days (NFR-04)",
+    )
 
 
 class ValidationConfig(_Base):
