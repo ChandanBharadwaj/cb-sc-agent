@@ -234,6 +234,7 @@ class ConfigService:
         priority: int | None = None,
         display_name: str | None = None,
         trusted: bool = False,
+        force_review: bool = False,
     ) -> UpdateResult:
         row = fetch_one(self.conn, "SELECT * FROM source WHERE source_id = %s FOR UPDATE", (source_id,))
         if row is None:
@@ -270,7 +271,8 @@ class ConfigService:
             )
         )
         sensitive = [p for p in changed if is_sensitive_path(p)]
-        if sensitive and not trusted:
+        if (sensitive or force_review) and not trusted:
+            review_paths = sensitive or changed
             self._write_version(
                 source_id, next_version, new_config, new_schedule, changed, actor, reason, "PENDING_APPROVAL"
             )
@@ -281,15 +283,19 @@ class ConfigService:
                 (
                     source_id,
                     f"{source_id}@v{next_version}",
-                    f"Security-sensitive config change for {source_id}: {', '.join(sensitive)}",
+                    (
+                        f"Security-sensitive config change for {source_id}: {', '.join(sensitive)}"
+                        if sensitive
+                        else f"Proposed config change for {source_id}: {', '.join(changed)}"
+                    ),
                     jsonb(
                         {
                             "version": next_version,
                             "base_version": row["config_version"],
                             "changed_paths": changed,
                             "sensitive_paths": sensitive,
-                            "old": {p: _get_path(row["config"], p) for p in sensitive},
-                            "new": {p: _get_path(new_config, p) for p in sensitive},
+                            "old": {p: _get_path(row["config"], p) for p in review_paths},
+                            "new": {p: _get_path(new_config, p) for p in review_paths},
                         }
                     ),
                     reason,
@@ -306,7 +312,8 @@ class ConfigService:
                 version=next_version,
                 pending_change_id=int(change_id),
                 changed_paths=changed,
-                message="security-sensitive change submitted for second-admin approval",
+                message="change submitted for admin approval"
+                + (" (security-sensitive: second admin required)" if sensitive else ""),
             )
         # written as a transient PENDING_APPROVAL row and activated in the same transaction
         self._write_version(
