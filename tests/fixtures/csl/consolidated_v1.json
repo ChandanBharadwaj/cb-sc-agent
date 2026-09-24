@@ -1,0 +1,16 @@
+{"total": 6, "sources_used": [], "results": [
+ {"id": "e0f1a2b3c4d5", "source": "Entity List (EL) - Bureau of Industry and Security", "entity_number": null, "type": null, "programs": [], "name": "Shenzhen Example Electronics Co., Ltd.", "title": null,
+  "addresses": [{"address": "Room 101, Building 5", "city": "Shenzhen", "state": "Guangdong", "postal_code": "518000", "country": "CN"}],
+  "federal_register_notice": "89 FR 12345", "start_date": "2024-02-21", "end_date": null, "standard_order": "N",
+  "license_requirement": "For all items subject to the EAR.", "license_policy": "Presumption of denial.",
+  "call_sign": null, "vessel_type": null, "gross_tonnage": null, "gross_registered_tonnage": null, "vessel_flag": null, "vessel_owner": null,
+  "remarks": null, "source_list_url": "https://www.bis.doc.gov/entity-list", "alt_names": ["SZ Example Electronics"], "citizenships": [], "dates_of_birth": [], "nationalities": [], "places_of_birth": [], "source_information_url": "https://www.federalregister.gov/d/2024-03456", "ids": []},
+ {"id": "a9b8c7d6e5f4", "source": "Denied Persons List (DPL) - Bureau of Industry and Security", "entity_number": null, "type": "Individual", "programs": [], "name": "John Q. Exporter", "title": null,
+  "addresses": [{"address": "1 Main St", "city": "Miami", "state": "FL", "postal_code": "33101", "country": "US"}],
+  "federal_register_notice": "88 FR 55555", "start_date": "2023-08-14", "end_date": "2033-08-14", "standard_order": "Y",
+  "license_requirement": null, "license_policy": null, "remarks": null, "source_list_url": "https://www.bis.doc.gov/dpl", "alt_names": [], "citizenships": [], "dates_of_birth": [], "nationalities": [], "places_of_birth": [], "source_information_url": null, "ids": []},
+ {"id": "1122334455", "source": "Unverified List (UVL) - Bureau of Industry and Security", "type": null, "name": "Moscow Parts Trading", "addresses": [{"address": "Leninsky Prospekt 5", "city": "Moscow", "country": "RU"}], "federal_register_notice": "87 FR 11111", "start_date": "2022-03-03", "alt_names": [], "ids": []},
+ {"id": "5566778899", "source": "Military End User (MEU) List - Bureau of Industry and Security", "type": null, "name": "Example Aviation Institute", "addresses": [{"country": "CN"}], "federal_register_notice": "85 FR 83793", "start_date": "2020-12-23", "license_requirement": "For all items subject to the EAR listed in supplement no. 2 to part 744.", "alt_names": [], "ids": []},
+ {"id": "sdn-000306", "source": "Specially Designated Nationals (SDN) - Treasury Department", "entity_number": 306, "type": "Entity", "name": "BANCO NACIONAL DE CUBA", "addresses": [], "alt_names": [], "ids": []},
+ {"id": "dtc-0001", "source": "ITAR Debarred (DTC) - State Department", "type": "Individual", "name": "Arms Broker Example", "addresses": [], "federal_register_notice": "79 FR 1000", "start_date": "2014-01-01", "alt_names": [], "ids": []}
+]}

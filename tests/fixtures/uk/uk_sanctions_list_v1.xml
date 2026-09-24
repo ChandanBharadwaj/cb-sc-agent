@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Designations xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <DateGenerated>2026-09-23T17:05:00</DateGenerated>
+  <Designation>
+    <LastUpdated>2024-02-01T00:00:00</LastUpdated>
+    <DateDesignated>2022-03-15T00:00:00</DateDesignated>
+    <UniqueID>RUS1234</UniqueID>
+    <OFSIGroupID>15012</OFSIGroupID>
+    <Names>
+      <Name><Name1>Ivan</Name1><Name2>Petrovich</Name2><Name6>IVANOV</Name6><NameType>Primary Name</NameType></Name>
+      <Name><Name1>Ivan</Name1><Name6>IVANOFF</Name6><NameType>Alias</NameType><AliasStrength>Good quality</AliasStrength></Name>
+      <Name><Name6>VANYA</Name6><NameType>Alias</NameType><AliasStrength>Low quality</AliasStrength></Name>
+    </Names>
+    <NonLatinNames><NonLatinName><NameNonLatinScript>Иван Петрович ИВАНОВ</NameNonLatinScript><NonLatinScriptType>Cyrillic</NonLatinScriptType><NonLatinScriptLanguage>Russian</NonLatinScriptLanguage></NonLatinName></NonLatinNames>
+    <RegimeName>The Russia (Sanctions) (EU Exit) Regulations 2019</RegimeName>
+    <IndividualEntityShip>Individual</IndividualEntityShip>
+    <DesignationSource>UK</DesignationSource>
+    <SanctionsImposed>Asset freeze|Travel Ban|Director Disqualification Sanction</SanctionsImposed>
+    <SanctionsImposedIndicators><AssetFreeze>true</AssetFreeze><ArmsEmbargo>false</ArmsEmbargo><TravelBan>true</TravelBan><DirectorDisqualificationSanction>true</DirectorDisqualificationSanction><TrustServicesSanctions>false</TrustServicesSanctions></SanctionsImposedIndicators>
+    <OtherInformation>(UK Sanctions List Ref):RUS1234.</OtherInformation>
+    <UKStatementofReasons>Ivanov is a Russian businessman who is involved in obtaining a benefit from the Government of Russia.</UKStatementofReasons>
+    <Addresses><Address><AddressLine1>Tverskaya Street 1</AddressLine1><AddressLine4>Moscow</AddressLine4><AddressCountry>Russia</AddressCountry></Address></Addresses>
+    <IndividualDetails><Individual>
+      <DOBs><DOB>dd/mm/1965</DOB><DOB>12/04/1966</DOB></DOBs>
+      <Nationalities><Nationality>Russia</Nationality></Nationalities>
+      <PassportDetails><PassportDetail><PassportNumber>75 1234567</PassportNumber><PassportAdditionalInformation>Russian</PassportAdditionalInformation></PassportDetail></PassportDetails>
+      <Positions><Position>Chairman, Example Holding JSC</Position></Positions>
+      <BirthDetails><Location><TownOfBirth>Leningrad</TownOfBirth><CountryOfBirth>Russia</CountryOfBirth></Location></BirthDetails>
+      <Genders><Gender>Male</Gender></Genders>
+    </Individual></IndividualDetails>
+  </Designation>
+  <Designation>
+    <LastUpdated>2025-06-01T00:00:00</LastUpdated>
+    <DateDesignated>2023-05-19T00:00:00</DateDesignated>
+    <UniqueID>RUS2001</UniqueID>
+    <OFSIGroupID>16001</OFSIGroupID>
+    <Names><Name><Name6>SEVERNY SHIPPING LLC</Name6><NameType>Primary Name</NameType></Name></Names>
+    <RegimeName>The Russia (Sanctions) (EU Exit) Regulations 2019</RegimeName>
+    <IndividualEntityShip>Entity</IndividualEntityShip>
+    <DesignationSource>UK</DesignationSource>
+    <SanctionsImposed>Asset freeze|Trust services sanctions</SanctionsImposed>
+    <SanctionsImposedIndicators><AssetFreeze>true</AssetFreeze><TrustServicesSanctions>true</TrustServicesSanctions></SanctionsImposedIndicators>
+    <Addresses><Address><AddressLine1>Nevsky Prospekt 10</AddressLine1><AddressLine4>St Petersburg</AddressLine4><AddressPostalCode>191186</AddressPostalCode><AddressCountry>Russia</AddressCountry></Address></Addresses>
+    <EntityDetails><Entity><BusinessRegistrationNumbers><BusinessRegistrationNumber>1177847000000</BusinessRegistrationNumber></BusinessRegistrationNumbers><ParentCompanies><ParentCompany>EXAMPLE HOLDING JSC</ParentCompany></ParentCompanies></Entity></EntityDetails>
+  </Designation>
+  <Designation>
+    <LastUpdated>2025-07-21T00:00:00</LastUpdated>
+    <DateDesignated>2025-05-20T00:00:00</DateDesignated>
+    <UniqueID>RUS3001</UniqueID>
+    <OFSIGroupID>17001</OFSIGroupID>
+    <Names><Name><Name6>ARCTIC DAWN</Name6><NameType>Primary Name</NameType></Name></Names>
+    <RegimeName>The Russia (Sanctions) (EU Exit) Regulations 2019</RegimeName>
+    <IndividualEntityShip>Ship</IndividualEntityShip>
+    <DesignationSource>UK</DesignationSource>
+    <SanctionsImposed>Ship sanctions: port entry ban, deflag</SanctionsImposed>
+    <SanctionsImposedIndicators><ProhibitionOfPortEntry>true</ProhibitionOfPortEntry><Deflag>true</Deflag><CharteringOfShips>true</CharteringOfShips></SanctionsImposedIndicators>
+    <ShipDetails><Ship><IMONumbers><IMONumber>9074729</IMONumber></IMONumbers><CurrentOwnerOperators><CurrentOwnerOperator>SEVERNY SHIPPING LLC</CurrentOwnerOperator></CurrentOwnerOperators><CurrentBelievedFlagOfShips><CurrentBelievedFlagOfShip>Cameroon</CurrentBelievedFlagOfShip></CurrentBelievedFlagOfShips><PreviousFlags><PreviousFlag>Gabon</PreviousFlag></PreviousFlags><TypeOfShips><TypeOfShip>Crude Oil Tanker</TypeOfShip></TypeOfShips><TonnageOfShips><TonnageOfShip>62000</TonnageOfShip></TonnageOfShips><YearBuilts><YearBuilt>2004</YearBuilt></YearBuilts></Ship></ShipDetails>
+  </Designation>
+  <Designation>
+    <LastUpdated>2021-01-01T00:00:00</LastUpdated>
+    <DateDesignated>2001-01-31T00:00:00</DateDesignated>
+    <UniqueID>AFG0080</UniqueID>
+    <OFSIGroupID>7071</OFSIGroupID>
+    <UNReferenceNumber>TAi.080</UNReferenceNumber>
+    <Names><Name><Name1>Abdul</Name1><Name2>Rahman</Name2><Name6>ZAHID</Name6><NameType>Primary Name</NameType></Name></Names>
+    <RegimeName>The Afghanistan (Sanctions) (EU Exit) Regulations 2020</RegimeName>
+    <IndividualEntityShip>Individual</IndividualEntityShip>
+    <DesignationSource>UN</DesignationSource>
+    <SanctionsImposed>Asset freeze|Arms embargo|Travel Ban</SanctionsImposed>
+    <IndividualDetails><Individual><DOBs><DOB>dd/mm/1966</DOB></DOBs><Nationalities><Nationality>Afghanistan</Nationality></Nationalities></Individual></IndividualDetails>
+  </Designation>
+</Designations>

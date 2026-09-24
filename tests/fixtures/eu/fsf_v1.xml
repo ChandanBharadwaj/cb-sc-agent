@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<export xmlns="http://eu.europa.ec/fpi/fsd/export" generationDate="2026-09-23T18:00:03.123+02:00" globalFileId="160123">
+  <sanctionEntity designationDetails="" unitedNationId="" euReferenceNumber="EU.7101.30" logicalId="130001">
+    <remark>Russian businessman</remark>
+    <regulation regulationType="implementingRegulation" organisationType="council" publicationDate="2022-03-15" entryIntoForceDate="2022-03-15" numberTitle="2022/427 (OJ L87I)" programme="UKR" logicalId="150001">
+      <publicationUrl>https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=OJ:L:2022:087I:TOC</publicationUrl>
+    </regulation>
+    <subjectType code="person" classificationCode="P"/>
+    <nameAlias firstName="Ivan" middleName="Petrovich" lastName="IVANOV" wholeName="Ivan Petrovich IVANOV" function="Chairman of Example Holding JSC" gender="M" title="" nameLanguage="" strong="true" regulationLanguage="en" logicalId="170001"/>
+    <nameAlias firstName="" middleName="" lastName="" wholeName="Иван Петрович Иванов" function="" gender="M" title="" nameLanguage="RU" strong="true" regulationLanguage="en" logicalId="170002"/>
+    <nameAlias firstName="" middleName="" lastName="" wholeName="Vanya" function="" gender="" title="" nameLanguage="" strong="false" regulationLanguage="en" logicalId="170003"/>
+    <citizenship region="" countryIso2Code="RU" countryDescription="RUSSIAN FEDERATION" regulationLanguage="en" logicalId="180001"/>
+    <birthdate circa="false" calendarType="GREGORIAN" city="Leningrad" zipCode="" birthdate="1966-04-12" dayOfMonth="12" monthOfYear="4" year="1966" region="" place="" countryIso2Code="RU" countryDescription="RUSSIAN FEDERATION" regulationLanguage="en" logicalId="190001"/>
+    <identification diplomatic="false" knownExpired="false" knownFalse="false" reportedLost="false" revokedByIssuer="false" issuedBy="" latinNumber="" nameOnDocument="" number="751234567" region="" countryIso2Code="RU" countryDescription="RUSSIAN FEDERATION" identificationTypeCode="passport" identificationTypeDescription="National passport" regulationLanguage="en" logicalId="200001"/>
+    <address city="Moscow" street="Tverskaya Street 1" poBox="" zipCode="" region="" place="" asAtListingTime="false" countryIso2Code="RU" countryDescription="RUSSIAN FEDERATION" regulationLanguage="en" logicalId="210001"/>
+  </sanctionEntity>
+  <sanctionEntity designationDetails="" unitedNationId="QDe.109" euReferenceNumber="EU.1234.56" logicalId="130002">
+    <regulation regulationType="regulation" organisationType="commission" publicationDate="2004-01-28" entryIntoForceDate="2004-01-29" numberTitle="180/2004 (OJ L28)" programme="TAQA" logicalId="150002">
+      <publicationUrl>http://eur-lex.europa.eu/LexUriServ/LexUriServ.do?uri=OJ:L:2004:028:0015:0016:EN:PDF</publicationUrl>
+    </regulation>
+    <subjectType code="enterprise" classificationCode="E"/>
+    <nameAlias firstName="" middleName="" lastName="" wholeName="Al-Haramain Islamic Foundation" function="" gender="" title="" nameLanguage="" strong="true" regulationLanguage="en" logicalId="170010"/>
+    <nameAlias firstName="" middleName="" lastName="" wholeName="Vazir" function="" gender="" title="" nameLanguage="" strong="false" regulationLanguage="en" logicalId="170011"/>
+    <address city="Travnik" street="64 Poturmahala" poBox="" zipCode="" region="" place="" asAtListingTime="false" countryIso2Code="BA" countryDescription="BOSNIA AND HERZEGOVINA" regulationLanguage="en" logicalId="210010"/>
+    <identification diplomatic="false" knownExpired="false" knownFalse="false" reportedLost="false" revokedByIssuer="false" number="4209000000" countryIso2Code="00" countryDescription="UNKNOWN" identificationTypeCode="regnumber" identificationTypeDescription="Registration Number" regulationLanguage="en" logicalId="200010"/>
+  </sanctionEntity>
+  <sanctionEntity designationDetails="" unitedNationId="" euReferenceNumber="EU.9001.11" logicalId="130003">
+    <regulation regulationType="regulation" organisationType="council" publicationDate="2023-06-23" entryIntoForceDate="2023-06-23" numberTitle="2023/1215 (OJ L159I)" programme="RUS" logicalId="150003"><publicationUrl>https://eur-lex.europa.eu/eli/reg/2023/1215/oj</publicationUrl></regulation>
+    <subjectType code="enterprise" classificationCode="E"/>
+    <nameAlias wholeName="Kiev Harbour Trading Ltd" strong="true" regulationLanguage="en" logicalId="170020"/>
+    <address city="" street="" zipCode="" countryIso2Code="00" countryDescription="Ukraine (occupied territories)" regulationLanguage="en" logicalId="210020"/>
+  </sanctionEntity>
+</export>

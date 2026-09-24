@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Sanctions xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/ADVANCED_XML">
+  <DateOfIssue><Year>2026</Year><Month>9</Month><Day>23</Day></DateOfIssue>
+  <ReferenceValueSets>
+    <AliasTypeValues><AliasType ID="1400">A.K.A.</AliasType><AliasType ID="1401">F.K.A.</AliasType><AliasType ID="1402">N.K.A.</AliasType><AliasType ID="1403">Name</AliasType></AliasTypeValues>
+    <CountryValues><Country ID="11" ISO2="AF">Afghanistan</Country><Country ID="91">Iran</Country><Country ID="161">Panama</Country><Country ID="179">Russia</Country><Country ID="231">United Arab Emirates</Country></CountryValues>
+    <DetailReferenceValues><DetailReference ID="91526">Male</DetailReference><DetailReference ID="1626">Crude Oil Tanker</DetailReference><DetailReference ID="1700">Panama</DetailReference></DetailReferenceValues>
+    <DetailTypeValues><DetailType ID="1430">LOOKUP</DetailType><DetailType ID="1431">DATE</DetailType><DetailType ID="1432">TEXT</DetailType><DetailType ID="1433">COUNTRY</DetailType></DetailTypeValues>
+    <EntryEventTypeValues><EntryEventType ID="1">Created</EntryEventType></EntryEventTypeValues>
+    <FeatureTypeValues>
+      <FeatureType ID="8">Birthdate</FeatureType><FeatureType ID="9">Place of Birth</FeatureType>
+      <FeatureType ID="10">Nationality Country</FeatureType><FeatureType ID="25">Location</FeatureType>
+      <FeatureType ID="224">Gender</FeatureType><FeatureType ID="1">Vessel Call Sign</FeatureType>
+      <FeatureType ID="2">Vessel Type</FeatureType><FeatureType ID="3">Vessel Flag</FeatureType>
+      <FeatureType ID="1034">MMSI</FeatureType><FeatureType ID="41">Aircraft Model</FeatureType>
+      <FeatureType ID="44">Aircraft Manufacturer’s Serial Number (MSN)</FeatureType><FeatureType ID="45">Aircraft Tail Number</FeatureType>
+      <FeatureType ID="50">Aircraft Operator</FeatureType><FeatureType ID="704">Additional Sanctions Information -</FeatureType>
+      <FeatureType ID="990">Organization Established Date</FeatureType>
+    </FeatureTypeValues>
+    <IDRegDocDateTypeValues><IDRegDocDateType ID="1480">Issue Date</IDRegDocDateType><IDRegDocDateType ID="1481">Expiration Date</IDRegDocDateType></IDRegDocDateTypeValues>
+    <IDRegDocTypeValues><IDRegDocType ID="1570">Passport</IDRegDocType><IDRegDocType ID="1571">National ID No.</IDRegDocType><IDRegDocType ID="1584">Registration Number</IDRegDocType><IDRegDocType ID="1626">Vessel Registration Identification</IDRegDocType><IDRegDocType ID="91264">Legal Entity Number</IDRegDocType></IDRegDocTypeValues>
+    <LegalBasisValues><LegalBasis ID="1" LegalBasisShortRef="EO13224">Executive Order 13224 (Terrorism)</LegalBasis><LegalBasis ID="2" LegalBasisShortRef="EO13846">Executive Order 13846 (Iran)</LegalBasis></LegalBasisValues>
+    <ListValues><List ID="1550">SDN List</List></ListValues>
+    <LocPartTypeValues><LocPartType ID="1451">ADDRESS1</LocPartType><LocPartType ID="1454">CITY</LocPartType><LocPartType ID="1455">STATE/PROVINCE</LocPartType><LocPartType ID="1456">POSTAL CODE</LocPartType></LocPartTypeValues>
+    <NamePartTypeValues><NamePartType ID="1520">Last Name</NamePartType><NamePartType ID="1521">First Name</NamePartType><NamePartType ID="1522">Middle Name</NamePartType><NamePartType ID="1524">Aircraft Name</NamePartType><NamePartType ID="1525">Entity Name</NamePartType><NamePartType ID="1526">Vessel Name</NamePartType></NamePartTypeValues>
+    <PartySubTypeValues><PartySubType ID="1" PartyTypeID="4">Vessel</PartySubType><PartySubType ID="2" PartyTypeID="4">Aircraft</PartySubType><PartySubType ID="3" PartyTypeID="2">Unknown</PartySubType><PartySubType ID="4" PartyTypeID="1">Unknown</PartySubType></PartySubTypeValues>
+    <PartyTypeValues><PartyType ID="1">Individual</PartyType><PartyType ID="2">Entity</PartyType><PartyType ID="4">Transport</PartyType></PartyTypeValues>
+    <RelationTypeValues><RelationType ID="15003">Owned or Controlled By</RelationType><RelationType ID="1555">Associate Of</RelationType></RelationTypeValues>
+    <SanctionsTypeValues><SanctionsType ID="1">Program</SanctionsType><SanctionsType ID="2">Block</SanctionsType></SanctionsTypeValues>
+    <ScriptValues><Script ID="215" ScriptCode="Latn">Latin</Script><Script ID="220" ScriptCode="Cyrl">Cyrillic</Script></ScriptValues>
+  </ReferenceValueSets>
+  <Locations>
+    <Location ID="3001"><LocationCountry CountryID="11"/><LocationPart LocPartTypeID="1454"><LocationPartValue Primary="true"><Value>Kabul</Value></LocationPartValue></LocationPart></Location>
+    <Location ID="3002"><LocationCountry CountryID="11"/></Location>
+    <Location ID="3003"><LocationCountry CountryID="231"/><LocationPart LocPartTypeID="1451"><LocationPartValue Primary="true"><Value>Office 12, Al Maktoum Road</Value></LocationPartValue></LocationPart><LocationPart LocPartTypeID="1454"><LocationPartValue Primary="true"><Value>Dubai</Value></LocationPartValue></LocationPart></Location>
+    <Location ID="3004"><LocationCountry CountryID="179"/><LocationPart LocPartTypeID="1454"><LocationPartValue Primary="true"><Value>Moscow</Value></LocationPartValue></LocationPart></Location>
+  </Locations>
+  <IDRegDocuments>
+    <IDRegDocument ID="5001" IDRegDocTypeID="1570" IdentityID="7001" IssuedBy-CountryID="11">
+      <IDRegistrationNo>OA123456</IDRegistrationNo>
+      <DocumentDate IDRegDocDateTypeID="1481"><DatePeriod><Start><From><Year>2030</Year><Month>1</Month><Day>15</Day></From><To><Year>2030</Year><Month>1</Month><Day>15</Day></To></Start><End><From><Year>2030</Year><Month>1</Month><Day>15</Day></From><To><Year>2030</Year><Month>1</Month><Day>15</Day></To></End></DatePeriod></DocumentDate>
+    </IDRegDocument>
+    <IDRegDocument ID="5002" IDRegDocTypeID="1584" IdentityID="7002" IssuedBy-CountryID="231"><IDRegistrationNo>DMCC-12345</IDRegistrationNo></IDRegDocument>
+    <IDRegDocument ID="5003" IDRegDocTypeID="1626" IdentityID="7003"><IDRegistrationNo>IMO 9074729</IDRegistrationNo></IDRegDocument>
+    <IDRegDocument ID="5004" IDRegDocTypeID="91264" IdentityID="7002"><IDRegistrationNo>5493001KJTIIGC8Y1R12</IDRegistrationNo></IDRegDocument>
+  </IDRegDocuments>
+  <DistinctParties>
+    <DistinctParty FixedRef="36001">
+      <Profile ID="36001" PartySubTypeID="4">
+        <Identity ID="7001" FixedRef="36001" Primary="true" False="false">
+          <Alias FixedRef="36001" AliasTypeID="1403" Primary="true" LowQuality="false">
+            <DocumentedName ID="8001" FixedRef="36001" DocNameStatusID="1">
+              <DocumentedNamePart><NamePartValue NamePartGroupID="9001" ScriptID="215">HAQQANI</NamePartValue></DocumentedNamePart>
+              <DocumentedNamePart><NamePartValue NamePartGroupID="9002" ScriptID="215">Sirajuddin</NamePartValue></DocumentedNamePart>
+            </DocumentedName>
+          </Alias>
+          <Alias FixedRef="36001" AliasTypeID="1400" Primary="false" LowQuality="true">
+            <DocumentedName ID="8002" FixedRef="36001" DocNameStatusID="1">
+              <DocumentedNamePart><NamePartValue NamePartGroupID="9003" ScriptID="215">KHALIFA</NamePartValue></DocumentedNamePart>
+            </DocumentedName>
+          </Alias>
+          <Alias FixedRef="36001" AliasTypeID="1400" Primary="false" LowQuality="false">
+            <DocumentedName ID="8003" FixedRef="36001" DocNameStatusID="1">
+              <DocumentedNamePart><NamePartValue NamePartGroupID="9001" ScriptID="215">HAQANI</NamePartValue></DocumentedNamePart>
+              <DocumentedNamePart><NamePartValue NamePartGroupID="9002" ScriptID="215">Siraj</NamePartValue></DocumentedNamePart>
+            </DocumentedName>
+          </Alias>
+          <NamePartGroups><MasterNamePartGroup><NamePartGroup ID="9001" NamePartTypeID="1520"/></MasterNamePartGroup><MasterNamePartGroup><NamePartGroup ID="9002" NamePartTypeID="1521"/></MasterNamePartGroup><MasterNamePartGroup><NamePartGroup ID="9003" NamePartTypeID="1521"/></MasterNamePartGroup></NamePartGroups>
+        </Identity>
+        <Feature ID="1" FeatureTypeID="8"><FeatureVersion ID="11" ReliabilityID="1"><DatePeriod CalendarTypeID="1"><Start Approximate="true"><From><Year>1973</Year><Month>1</Month><Day>1</Day></From><To><Year>1973</Year><Month>1</Month><Day>1</Day></To></Start><End Approximate="true"><From><Year>1973</Year><Month>12</Month><Day>31</Day></From><To><Year>1973</Year><Month>12</Month><Day>31</Day></To></End></DatePeriod></FeatureVersion></Feature>
+        <Feature ID="2" FeatureTypeID="9"><FeatureVersion ID="12"><VersionDetail DetailTypeID="1432">Danda, Miramshah, North Waziristan, Pakistan</VersionDetail></FeatureVersion></Feature>
+        <Feature ID="3" FeatureTypeID="10"><FeatureVersion ID="13"><VersionLocation LocationID="3002"/></FeatureVersion></Feature>
+        <Feature ID="4" FeatureTypeID="25"><FeatureVersion ID="14"><VersionLocation LocationID="3001"/></FeatureVersion></Feature>
+        <Feature ID="5" FeatureTypeID="224"><FeatureVersion ID="15"><VersionDetail DetailTypeID="1430" DetailReferenceID="91526"/></FeatureVersion></Feature>
+      </Profile>
+    </DistinctParty>
+    <DistinctParty FixedRef="36002">
+      <Profile ID="36002" PartySubTypeID="3">
+        <Identity ID="7002" FixedRef="36002" Primary="true" False="false">
+          <Alias FixedRef="36002" AliasTypeID="1403" Primary="true" LowQuality="false">
+            <DocumentedName ID="8010"><DocumentedNamePart><NamePartValue NamePartGroupID="9010" ScriptID="215">GULF PETRO TRADING FZE</NamePartValue></DocumentedNamePart></DocumentedName>
+            <DocumentedName ID="8011"><DocumentedNamePart><NamePartValue NamePartGroupID="9010" ScriptID="220">ГАЛФ ПЕТРО ТРЕЙДИНГ</NamePartValue></DocumentedNamePart></DocumentedName>
+          </Alias>
+          <Alias FixedRef="36002" AliasTypeID="1401" Primary="false" LowQuality="false">
+            <DocumentedName ID="8012"><DocumentedNamePart><NamePartValue NamePartGroupID="9010" ScriptID="215">GULF PETROLEUM TRADING LLC</NamePartValue></DocumentedNamePart></DocumentedName>
+          </Alias>
+          <NamePartGroups><MasterNamePartGroup><NamePartGroup ID="9010" NamePartTypeID="1525"/></MasterNamePartGroup></NamePartGroups>
+        </Identity>
+        <Feature ID="20" FeatureTypeID="25"><FeatureVersion ID="21"><VersionLocation LocationID="3003"/></FeatureVersion></Feature>
+        <Feature ID="22" FeatureTypeID="704"><FeatureVersion ID="23"><VersionDetail DetailTypeID="1432">Subject to Secondary Sanctions</VersionDetail></FeatureVersion></Feature>
+        <Feature ID="24" FeatureTypeID="990"><FeatureVersion ID="25"><VersionDetail DetailTypeID="1432">2015</VersionDetail></FeatureVersion></Feature>
+      </Profile>
+    </DistinctParty>
+    <DistinctParty FixedRef="36003">
+      <Profile ID="36003" PartySubTypeID="1">
+        <Identity ID="7003" FixedRef="36003" Primary="true" False="false">
+          <Alias FixedRef="36003" AliasTypeID="1403" Primary="true" LowQuality="false">
+            <DocumentedName ID="8020"><DocumentedNamePart><NamePartValue NamePartGroupID="9020" ScriptID="215">OCEAN STAR</NamePartValue></DocumentedNamePart></DocumentedName>
+          </Alias>
+          <NamePartGroups><MasterNamePartGroup><NamePartGroup ID="9020" NamePartTypeID="1526"/></MasterNamePartGroup></NamePartGroups>
+        </Identity>
+        <Feature ID="30" FeatureTypeID="1"><FeatureVersion ID="31"><VersionDetail DetailTypeID="1432">3FAB7</VersionDetail></FeatureVersion></Feature>
+        <Feature ID="32" FeatureTypeID="2"><FeatureVersion ID="33"><VersionDetail DetailTypeID="1430" DetailReferenceID="1626"/></FeatureVersion></Feature>
+        <Feature ID="34" FeatureTypeID="3"><FeatureVersion ID="35"><VersionDetail DetailTypeID="1430" DetailReferenceID="1700"/></FeatureVersion></Feature>
+        <Feature ID="36" FeatureTypeID="1034"><FeatureVersion ID="37"><VersionDetail DetailTypeID="1432">352001234</VersionDetail></FeatureVersion></Feature>
+      </Profile>
+    </DistinctParty>
+    <DistinctParty FixedRef="36004">
+      <Profile ID="36004" PartySubTypeID="2">
+        <Identity ID="7004" FixedRef="36004" Primary="true" False="false">
+          <Alias FixedRef="36004" AliasTypeID="1403" Primary="true" LowQuality="false">
+            <DocumentedName ID="8030"><DocumentedNamePart><NamePartValue NamePartGroupID="9030" ScriptID="215">EP-MNA</NamePartValue></DocumentedNamePart></DocumentedName>
+          </Alias>
+          <NamePartGroups><MasterNamePartGroup><NamePartGroup ID="9030" NamePartTypeID="1524"/></MasterNamePartGroup></NamePartGroups>
+        </Identity>
+        <Feature ID="40" FeatureTypeID="41"><FeatureVersion ID="41"><VersionDetail DetailTypeID="1432">Airbus A340-642</VersionDetail></FeatureVersion></Feature>
+        <Feature ID="42" FeatureTypeID="44"><FeatureVersion ID="43"><VersionDetail DetailTypeID="1432">1028</VersionDetail></FeatureVersion></Feature>
+        <Feature ID="44" FeatureTypeID="45"><FeatureVersion ID="45"><VersionDetail DetailTypeID="1432">EP-MNA</VersionDetail></FeatureVersion></Feature>
+        <Feature ID="46" FeatureTypeID="50"><FeatureVersion ID="47"><VersionDetail DetailTypeID="1432">Mahan Air</VersionDetail></FeatureVersion></Feature>
+      </Profile>
+    </DistinctParty>
+  </DistinctParties>
+  <ProfileRelationships>
+    <ProfileRelationship ID="60001" From-ProfileID="36003" To-ProfileID="36002" RelationTypeID="15003" RelationQualityID="1" Former="false"/>
+  </ProfileRelationships>
+  <SanctionsEntries>
+    <SanctionsEntry ID="70001" ProfileID="36001" ListID="1550">
+      <EntryEvent ID="1" EntryEventTypeID="1" LegalBasisID="1"><Date><Year>2008</Year><Month>3</Month><Day>11</Day></Date></EntryEvent>
+      <SanctionsMeasure ID="1" SanctionsTypeID="2"/>
+      <SanctionsMeasure ID="2" SanctionsTypeID="1"><Comment>SDGT</Comment></SanctionsMeasure>
+    </SanctionsEntry>
+    <SanctionsEntry ID="70002" ProfileID="36002" ListID="1550">
+      <EntryEvent ID="2" EntryEventTypeID="1" LegalBasisID="2"><Date><Year>2024</Year><Month>10</Month><Day>11</Day></Date></EntryEvent>
+      <SanctionsMeasure ID="3" SanctionsTypeID="2"/>
+      <SanctionsMeasure ID="4" SanctionsTypeID="1"><Comment>IRAN-EO13846</Comment></SanctionsMeasure>
+      <SanctionsMeasure ID="5" SanctionsTypeID="1"><Comment>SDGT</Comment></SanctionsMeasure>
+    </SanctionsEntry>
+    <SanctionsEntry ID="70003" ProfileID="36003" ListID="1550">
+      <EntryEvent ID="3" EntryEventTypeID="1" LegalBasisID="2"><Date><Year>2024</Year><Month>10</Month><Day>11</Day></Date></EntryEvent>
+      <SanctionsMeasure ID="6" SanctionsTypeID="2"/>
+      <SanctionsMeasure ID="7" SanctionsTypeID="1"><Comment>IRAN-EO13846</Comment></SanctionsMeasure>
+    </SanctionsEntry>
+    <SanctionsEntry ID="70004" ProfileID="36004" ListID="1550">
+      <EntryEvent ID="4" EntryEventTypeID="1" LegalBasisID="2"><Date><Year>2011</Year><Month>10</Month><Day>12</Day></Date></EntryEvent>
+      <SanctionsMeasure ID="8" SanctionsTypeID="2"/>
+      <SanctionsMeasure ID="9" SanctionsTypeID="1"><Comment>SDGT</Comment></SanctionsMeasure>
+    </SanctionsEntry>
+  </SanctionsEntries>
+</Sanctions>

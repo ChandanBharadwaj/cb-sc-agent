@@ -63,7 +63,6 @@ sources:
         max_removed_abs: 25
         max_added_abs: 200       # single-day re-listings of 121 entries have happened
         fill_floors: {PERSON.dob: 0.85, PERSON.nationality: 0.75}
-        schema_file: un/consolidated.xsd
 
   - source_id: uk_fcdo
     display_name: UK Sanctions List (FCDO)
@@ -116,7 +115,6 @@ sources:
       include_list_codes: [EL, DPL, UVL, MEU, DTC, ISN]
       validation:
         min_records: 1000
-        schema_file: csl/consolidated.schema.json
 
   - source_id: eu_annex_xlii
     display_name: "EU Reg. 833/2014 Annex XLII - banned vessels (curated)"
