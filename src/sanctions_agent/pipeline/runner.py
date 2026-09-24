@@ -113,7 +113,13 @@ class PipelineRunner:
             except FetchError as e:
                 status = self._finish_fetch_failure(ctx, e)
             except PipelineError as e:
-                status = self._finish_data_failure(ctx, e.error_class, e.detail, "QUARANTINED")
+                if e.error_class in (ErrorClass.CONFIG_ERROR, ErrorClass.INTERNAL) or ctx.run["run_kind"] in (
+                    "NOTICE_SYNC",
+                    "ENRICHMENT_BATCH",
+                ):
+                    status = self._finish_fetch_failure(ctx, FetchError(e.error_class, e.detail))
+                else:
+                    status = self._finish_data_failure(ctx, e.error_class, e.detail, "QUARANTINED")
             except Exception as e:
                 log.exception("run_internal_error")
                 status = self._finish_internal(ctx, e)

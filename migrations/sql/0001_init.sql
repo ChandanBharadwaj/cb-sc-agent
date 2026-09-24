@@ -437,6 +437,7 @@ CREATE TABLE sanctions.rv_listing (
   measures           text[]   NOT NULL DEFAULT '{}',
   reason             text,
   remarks            text,
+  evidence_url       text,          -- official legal act / notice for this listing (FR-14)
   PRIMARY KEY (record_version_id, ord)
 );
 

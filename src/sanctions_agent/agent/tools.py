@@ -17,7 +17,7 @@ from agents import RunContextWrapper, Tool, function_tool
 from sanctions_agent.agent.context import AgentContext
 from sanctions_agent.agent.guards import ToolDenied, guarded
 from sanctions_agent.agent.state_snapshot import snapshot
-from sanctions_agent.db.engine import fetch_all, fetch_one, tx
+from sanctions_agent.db.engine import fetch_all, fetch_one, jsonb, tx
 from sanctions_agent.ops import autopilot, incidents
 from sanctions_agent.pipeline import removals, runs
 from sanctions_agent.sources.config_service import ConfigService, ValidationFailed
@@ -378,6 +378,145 @@ def discover_download_links(rc: Ctx, source_id: str, landing_page_url: str) -> d
     return {"final_url": res.final_url, "http_status": res.http_status, "candidate_links": links}
 
 
+@guarded("act", limit=("extractions", "max_extractions"))
+def extract_notice(rc: Ctx, notice_id: int) -> dict[str, Any]:
+    """Run the verified LLM extractor on an official notice that could not be matched deterministically
+    (e.g. an OFAC press release announcing removals). Verified entries that exactly match a current record
+    or a pending removal become NOTICE_LINK proposals for human review. Unverified entries are reported only."""
+    from sanctions_agent.agent.extractors import Extractor
+    from sanctions_agent.canonical.normalize.names import normalize_name
+    from sanctions_agent.enrichment.notices.base import notice_text
+    from sanctions_agent.review import add_proposal
+
+    with tx() as conn:
+        n = fetch_one(conn, "SELECT * FROM legal_notice WHERE notice_id = %s", (notice_id,))
+        if n is None:
+            raise ValueError(f"unknown notice {notice_id}")
+        text = n["title"] + "\n" + notice_text(conn, notice_id)
+    extraction, verification, cycle_id = Extractor().extract(
+        text, purpose="notice", subject_ref=f"notice:{notice_id}"
+    )
+    proposals, unmatched = 0, 0
+    with tx(actor=rc.context.actor) as conn:
+        for ve in verification.entries:
+            if not ve.ok or ve.entry.action not in ("LISTING", "DELISTING", "AMENDMENT"):
+                continue
+            norm = normalize_name(ve.entry.name)
+            recs = fetch_all(
+                conn,
+                """SELECT DISTINCT rv.source_id, rv.source_key FROM rv_name nm
+                JOIN record_version rv USING (record_version_id)
+                WHERE nm.normalized_name = %s AND rv.source_id = ANY(%s)
+                  AND (rv.valid_to_seq IS NULL OR EXISTS (SELECT 1 FROM removal_candidate c WHERE c.source_id = rv.source_id
+                       AND c.source_key = rv.source_key AND c.status IN ('PENDING','EVIDENCE_FOUND')))""",
+                (norm, n["related_sources"] or []),
+            )
+            if not recs:
+                unmatched += 1
+                continue
+            for r in recs:
+                link = fetch_one(
+                    conn,
+                    """INSERT INTO notice_link (notice_id, source_id, source_key, link_type, method,
+                        confidence, verbatim_quote, status) VALUES (%s,%s,%s,%s,'AGENT',0.8,%s,'PENDING')
+                        ON CONFLICT DO NOTHING RETURNING link_id""",
+                    (notice_id, r["source_id"], r["source_key"], ve.entry.action, ve.entry.verbatim_quote),
+                )
+                if link is None:
+                    continue
+                cid = add_proposal(
+                    conn,
+                    kind="NOTICE_LINK",
+                    source_id=r["source_id"],
+                    subject_ref=f"{r['source_id']}:{r['source_key']}",
+                    title=f"{ve.entry.action.title()} evidence for {ve.entry.name} in notice {notice_id}",
+                    payload={"link_id": link["link_id"], "notice_id": notice_id, "action": ve.entry.action},
+                    proposed_by=rc.context.actor,
+                    agent_cycle_id=rc.context.cycle_id,
+                    evidence_urls=[n["url"]] if n["url"] else [],
+                    verbatim_quotes=[ve.entry.verbatim_quote],
+                    verification={"ok": True},
+                    dedupe_key=f"noticelink:{link['link_id']}",
+                )
+                conn.execute(
+                    "UPDATE notice_link SET proposed_change_id = %s WHERE link_id = %s",
+                    (cid, link["link_id"]),
+                )
+                proposals += 1
+        conn.execute(
+            "UPDATE legal_notice SET extraction_status = 'EXTRACTED', extracted = %s WHERE notice_id = %s",
+            (
+                jsonb(
+                    {
+                        "cycle_id": cycle_id,
+                        "entries": len(extraction.entries),
+                        "verified": sum(1 for e in verification.entries if e.ok),
+                    }
+                ),
+                notice_id,
+            ),
+        )
+    return {
+        "entries": len(extraction.entries),
+        "verified": sum(1 for e in verification.entries if e.ok),
+        "proposals": proposals,
+        "unmatched_verified_entries": unmatched,
+        "failed_verification": [p for e in verification.entries for p in e.problems][:10],
+    }
+
+
+@guarded("act", limit=("extractions", "max_extractions"))
+def extract_annex_act(rc: Ctx, notice_id: int, annex: Literal["XLII", "IV"]) -> dict[str, Any]:
+    """Extract Annex XLII (vessels) or Annex IV (entities) entries from an EU Official Journal act and file an
+    ANNEX_ENTRY proposal. Every entry is verified against the act text (verbatim quote, IMO checksum, no
+    dropped IMO numbers); a human approves before anything reaches screening."""
+    from sanctions_agent.agent.extractors import Extractor
+    from sanctions_agent.enrichment.notices.base import notice_text
+    from sanctions_agent.sources.l1.eu_annex import act_from_notice, entries_from_extraction, propose_entries
+
+    source_id = "eu_annex_xlii" if annex == "XLII" else "eu_annex_iv"
+    with tx() as conn:
+        text = notice_text(conn, notice_id)
+        act = act_from_notice(conn, notice_id)
+    if f"annex {annex}".lower() not in text.lower():
+        raise ToolDenied(f"the act text does not mention Annex {annex}")
+    hint = (
+        f"Extract ONLY the entries being added to or removed from Annex {annex} of Regulation 833/2014. "
+        + (
+            "Each vessel entry has a name and an IMO number."
+            if annex == "XLII"
+            else "Each entry is an entity name."
+        )
+    )
+    extraction, verification, cycle_id = Extractor().extract(
+        text, purpose=f"annex_{annex}", subject_ref=act["celex"], expect_imo_rows=annex == "XLII", hint=hint
+    )
+    entries = entries_from_extraction(extraction, verification)
+    ops = {e["action"] for e in entries}
+    operation = "REMOVE" if ops == {"DELISTING"} else "ADD"
+    with tx(actor=rc.context.actor) as conn:
+        cid = propose_entries(
+            conn,
+            source_id=source_id,
+            operation=operation,
+            entries=entries,
+            act=act,
+            proposed_by=rc.context.actor,
+            agent_cycle_id=rc.context.cycle_id,
+            count_check=verification.count_check,
+        )
+        conn.execute(
+            "UPDATE legal_notice SET extraction_status = 'EXTRACTED', extracted = %s WHERE notice_id = %s",
+            (jsonb({"cycle_id": cycle_id, "annex": annex, "proposal": cid}), notice_id),
+        )
+    return {
+        "proposal_id": cid,
+        "entries": len(entries),
+        "verified": sum(1 for e in entries if e["ok"]),
+        "count_check": verification.count_check,
+    }
+
+
 def _merge(base: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
     for k, v in patch.items():
         if isinstance(v, dict) and isinstance(base.get(k), dict):
@@ -406,6 +545,8 @@ ACT_TOOLS = [
     resolve_incident,
     propose_config_change,
     discover_download_links,
+    extract_notice,
+    extract_annex_act,
 ]
 
 

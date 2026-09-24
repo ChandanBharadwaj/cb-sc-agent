@@ -30,6 +30,8 @@ from sanctions_agent.db.engine import jsonb, tx
 from sanctions_agent.settings import get_settings
 
 MAX_CHARS = 48_000
+# Test/integration hook: a Model used when Extractor() is created without one (e.g. from agent tools).
+MODEL_OVERRIDE: Model | None = None
 IdKind = Literal["IMO", "PASSPORT", "NATIONAL_ID", "REGISTRATION", "TAX", "UN_REF", "OFAC_UID", "OTHER"]
 
 
@@ -176,7 +178,7 @@ class Extractor:
         s = get_settings()
         from sanctions_agent.agent.supervisor import build_model
 
-        model = self._model if self._model is not None else build_model(s.agent_model)
+        model = self._model or MODEL_OVERRIDE or build_model(s.agent_model)
         cycle_id = str(uuid.uuid4())
         trace_id = gen_trace_id()
         spent = spent_today()

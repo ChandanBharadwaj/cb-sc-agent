@@ -331,6 +331,18 @@ def fetch_with_retry(
     raise last
 
 
+def retry_call[T](fn: Callable[[], T], policy: RetryPolicy, *, sleep: Callable[[float], None] = time.sleep) -> T:
+    """Generic retry for API calls that raise FetchError (same retryable classes as downloads)."""
+    for attempt in range(1, policy.max_attempts + 1):
+        try:
+            return fn()
+        except FetchError as e:
+            if not e.retryable or attempt == policy.max_attempts:
+                raise
+            sleep(policy.delay(attempt, e.retry_after_s))
+    raise AssertionError("unreachable")
+
+
 def _int_or_none(v: str | None) -> int | None:
     try:
         return int(v) if v is not None else None

@@ -135,6 +135,7 @@ def child_rows(rv_id: int, d: dict[str, Any]) -> dict[str, list[tuple[Any, ...]]
                 list(lst.get("measures") or []),
                 lst.get("reason"),
                 lst.get("remarks"),
+                lst.get("evidence_url"),
             )
         )
     for i, r in enumerate(d.get("relationships", [])):
@@ -187,8 +188,8 @@ _COPY: dict[str, tuple[str, list[str]]] = {
     ),
     "rv_listing": (
         "record_version_id, ord, authority, list_name, program_code, listed_on, legal_basis, reference_no,"
-        " measures, reason, remarks",
-        ["int8", "int2", "text", "text", "text", "date", "text", "text", "text[]", "text", "text"],
+        " measures, reason, remarks, evidence_url",
+        ["int8", "int2", "text", "text", "text", "date", "text", "text", "text[]", "text", "text", "text"],
     ),
     "rv_relationship": (
         "record_version_id, ord, rel_type, target_source_key, target_name_raw, raw",
