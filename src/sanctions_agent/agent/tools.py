@@ -179,6 +179,7 @@ def run_ingestion(rc: Ctx, source_id: str, reason: str, force_refetch: bool = Fa
     """Queue a pull now. Refused if the source is paused/disabled, in maintenance, within the politeness
     interval, breaker-open, or already running. ``force_refetch`` ignores conditional GET / same-hash checks."""
     with tx(actor=rc.context.actor) as conn:
+        batch = runs.batch_for_cycle(conn, rc.context.cycle_id, rc.context.actor)
         res = autopilot.enqueue_guarded(
             conn,
             source_id,
@@ -187,7 +188,10 @@ def run_ingestion(rc: Ctx, source_id: str, reason: str, force_refetch: bool = Fa
             reason=reason,
             agent_cycle_id=rc.context.cycle_id,
             options={"force_refetch": True} if force_refetch else None,
+            batch_id=batch,
         )
+        if not res["ok"]:  # visible in the agent's batch: what it asked for and why it was refused
+            runs.record_refused(conn, batch, [{"source_id": source_id, "why": res["why"]}])
     if not res["ok"]:
         raise ToolDenied(res["why"])
     return res
@@ -212,6 +216,7 @@ def schedule_retry(rc: Ctx, source_id: str, delay_minutes: int, reason: str) -> 
                 reason=reason,
                 agent_cycle_id=rc.context.cycle_id,
                 not_before=datetime.now(UTC) + timedelta(minutes=delay_minutes),
+                batch_id=runs.batch_for_cycle(conn, rc.context.cycle_id, rc.context.actor),
             )
         except runs.RunAlreadyActive as e:
             raise ToolDenied(f"already has an active run {e.run_id}") from e
@@ -239,7 +244,10 @@ def reparse_archived(rc: Ctx, source_id: str, sha256: str, reason: str) -> dict[
             agent_cycle_id=rc.context.cycle_id,
             options={"reparse_sha256": sha256},
             ignore_min_interval=True,
+            batch_id=(batch := runs.batch_for_cycle(conn, rc.context.cycle_id, rc.context.actor)),
         )
+        if not res["ok"]:
+            runs.record_refused(conn, batch, [{"source_id": source_id, "why": res["why"]}])
     if not res["ok"]:
         raise ToolDenied(res["why"])
     return res

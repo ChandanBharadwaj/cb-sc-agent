@@ -20,6 +20,7 @@ from sanctions_agent.db.engine import fetch_all, fetch_val, tx
 from sanctions_agent.logs import get_logger
 from sanctions_agent.ops import incidents, system_settings
 from sanctions_agent.pipeline import removals, runs, source_state
+from sanctions_agent.scheduling.schedule import politeness_grace
 
 log = get_logger(__name__)
 
@@ -60,6 +61,7 @@ def enqueue_guarded(
     agent_cycle_id: str | None = None,
     options: dict[str, Any] | None = None,
     ignore_min_interval: bool = False,
+    batch_id: str | runs.BatchRef | None = None,
 ) -> dict[str, Any]:
     """Enqueue a run if every guard allows it. Returns {ok, run_id | why}."""
     src = fetch_all(conn, "SELECT * FROM source WHERE source_id = %s", (source_id,))
@@ -76,7 +78,8 @@ def enqueue_guarded(
             + (" (a DRAFT source can only be dry-run)" if s["status"] == "DRAFT" else ""),
         }
     now = datetime.now(UTC)
-    if not ignore_min_interval and s["last_attempt_at"] and now - s["last_attempt_at"] < s["min_interval"]:
+    polite = s["min_interval"] - politeness_grace(s["min_interval"])
+    if not ignore_min_interval and s["last_attempt_at"] and now - s["last_attempt_at"] < polite:
         return {
             "ok": False,
             "why": f"politeness: last attempt {now - s['last_attempt_at']} ago < min interval {s['min_interval']}",
@@ -94,6 +97,7 @@ def enqueue_guarded(
             reason=reason,
             agent_cycle_id=agent_cycle_id,
             options=options,
+            batch_id=batch_id,
         )
     except runs.RunAlreadyActive as e:
         return {"ok": False, "why": f"already running ({e.run_id})", "run_id": e.run_id}
@@ -120,12 +124,17 @@ def plan(conn: psycopg.Connection[Any]) -> list[PlannedRun]:
 
 
 def run_plan(
-    conn: psycopg.Connection[Any], planned: list[PlannedRun], *, requested_by: str = "autopilot"
+    conn: psycopg.Connection[Any],
+    planned: list[PlannedRun],
+    *,
+    requested_by: str = "autopilot",
+    batch: runs.BatchRef | None = None,
 ) -> TickReport:
     rep = TickReport()
+    batch = batch or runs.BatchRef(trigger="SCHEDULED", requested_by=requested_by, reason="scheduled cycle")
     for p in planned:
         res = enqueue_guarded(
-            conn, p.source_id, trigger=p.trigger, requested_by=requested_by, reason=p.reason
+            conn, p.source_id, trigger=p.trigger, requested_by=requested_by, reason=p.reason, batch_id=batch
         )
         (rep.enqueued if res["ok"] else rep.skipped).append(
             {"source_id": p.source_id, **res, "reason": p.reason}
@@ -133,9 +142,10 @@ def run_plan(
     return rep
 
 
-def watchdog(conn: psycopg.Connection[Any]) -> TickReport:
-    """Staleness monitoring (NFR-04) and forced pulls past the hard ceiling."""
+def watchdog(conn: psycopg.Connection[Any], batch: runs.BatchRef | None = None) -> TickReport:
+    """Staleness monitoring (NFR-04) and forced pulls past the hard ceiling (they join the cycle's batch)."""
     rep = TickReport()
+    batch = batch or runs.BatchRef(trigger="SCHEDULED", requested_by="watchdog", reason="scheduled cycle")
     if system_settings.maintenance_on(conn):
         return rep
     rows = fetch_all(
@@ -170,6 +180,7 @@ def watchdog(conn: psycopg.Connection[Any]) -> TickReport:
                     trigger="WATCHDOG",
                     requested_by="watchdog",
                     reason="hard staleness ceiling exceeded",
+                    batch_id=batch,
                 )
                 (rep.enqueued if res["ok"] else rep.skipped).append({"source_id": sid, **res})
         elif s["stale_for"] > s["warn_staleness"]:
@@ -272,10 +283,12 @@ def autopilot_cycle(requested_by: str = "autopilot") -> TickReport:
     """One deterministic cycle: chores, watchdog, scheduled / signalled pulls."""
     with tx(actor=requested_by) as conn:
         c = chores(conn)
+    # one batch per cycle, created on the first queued run: scheduled, signalled and watchdog pulls together
+    batch = runs.BatchRef(trigger="SCHEDULED", requested_by=requested_by, reason="scheduled cycle")
     with tx(actor=requested_by) as conn:
-        w = watchdog(conn)
+        w = watchdog(conn, batch)
     with tx(actor=requested_by) as conn:
-        r = run_plan(conn, plan(conn), requested_by=requested_by)
+        r = run_plan(conn, plan(conn), requested_by=requested_by, batch=batch)
     r.enqueued = w.enqueued + r.enqueued
     r.skipped = w.skipped + r.skipped
     r.incidents = w.incidents

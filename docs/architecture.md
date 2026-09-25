@@ -64,6 +64,21 @@ flowchart LR
 * **Blob store:** raw publisher files, content-addressed by SHA-256 and write-once (`0444` plus `O_EXCL` on FS;
   S3 Object Lock in production). Every published version can be rebuilt from its archived bytes.
 
+## Scheduling and batches
+
+* **Clock-aligned intervals.** An interval schedule fires on multiples of its cadence since the UTC epoch:
+  "every 2 h" is 00:00, 02:00, … UTC. Sources with the same cadence therefore fall due in the same tick.
+  * Each tick's queued runs, including watchdog-forced and signal-triggered pulls, form one **SCHEDULED
+    batch**. The batch is created lazily, so a quiet tick creates nothing.
+  * After a pull, the next due slot is the first one that also respects the politeness interval, with a
+    small allowance for tick jitter.
+  * Retries after failures are not aligned. They fire early and join whichever cycle is current.
+* **Other batches.**
+  * Each supervisor-agent cycle has one **AGENT batch**, which also records the requests its guards refused.
+  * Each ad-hoc request is one **MANUAL batch** (`POST /api/batches`, or `POST /api/sources/{id}/runs` for
+    a batch of one).
+  * A crash-recovered run keeps its batch as attempt 2.
+
 ## Ingestion pipeline (per run)
 
 ```mermaid
@@ -127,6 +142,7 @@ Schema `sanctions` (migration `0001_init`), plus the aggregate-only schema `anal
 erDiagram
   source ||--o{ source_config_version : "versioned config (maker-checker)"
   source ||--o{ ingestion_run : runs
+  run_batch ||--o{ ingestion_run : "runs started together"
   ingestion_run ||--o{ run_step : checkpoints
   ingestion_run ||--o{ fetch_evidence : attempts
   fetch_evidence }o--o| raw_artifact : bytes
@@ -153,7 +169,8 @@ erDiagram
 
 | Group | Tables | Notes |
 |---|---|---|
-| Control plane | `source`, `source_config_version`, `system_setting`, `ingestion_run`, `run_step`, `signal`, `incident` | Mutable and audited (`audit_log` trigger records old/new row, actor, time) |
+| Control plane | `source`, `source_config_version`, `system_setting`, `run_batch`, `ingestion_run`, `run_step`, `signal`, `incident` | Mutable and audited (`audit_log` trigger records old/new row, actor, time) |
+| Batches | `run_batch` (type, requester, reason, mode, requested sources, refused sources with reasons); every `ingestion_run.batch_id` is NOT NULL | Scheduled cycle, agent cycle, or ad-hoc request. Status is **derived** in `analytics.v_run_batches` from the latest attempt per source, never stored |
 | Evidence (BRD §9.4) | `raw_artifact`, `fetch_evidence` (partitioned monthly) | **Append-only**: a trigger raises on UPDATE/DELETE. Failed attempts are recorded too |
 | In-progress | `staging_record`, `staging_path_stats` | Keyed by `run_id`; never read by screening |
 | Published lists | `list_version`, `record_version` + `rv_name / rv_identifier / rv_address / rv_birth / rv_nationality / rv_listing / rv_relationship / rv_vessel / rv_aircraft` | SCD2 by per-source sequence. `doc` holds the full canonical record (hash and diff); `rv_*` are its immutable relational projection |
@@ -208,7 +225,7 @@ Three independent layers keep it at aggregate level:
 
 1. A deterministic input guardrail refuses row-level questions ("is X sanctioned", "list the names...")
    before any model call.
-2. Its 17 tools, including the free-form SQL escape hatch, read only `analytics` views. The SQL is
+2. Its 18 tools, including run batches and the free-form SQL escape hatch, read only `analytics` views. The SQL is
    parsed by sqlglot: one SELECT, allow-listed functions, and a limit of 500 rows.
 3. The database role cannot read `sanctions.*` at all.
 

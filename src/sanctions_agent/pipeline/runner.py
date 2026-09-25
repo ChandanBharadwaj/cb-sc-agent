@@ -52,7 +52,9 @@ class RunContext:
         self.source = source
         self.cancel_event = cancel_event
         self.options: dict[str, Any] = run.get("options") or {}
-        self.progress = ProgressReporter(self.run_id, source.source_id)
+        self.progress = ProgressReporter(
+            self.run_id, source.source_id, batch_id=str(run["batch_id"]) if run.get("batch_id") else None
+        )
         self.work = get_settings().work_dir / self.run_id
         self.work.mkdir(parents=True, exist_ok=True)
         self.version_id: int | None = None
@@ -876,6 +878,7 @@ def run_once(
     options: dict[str, Any] | None = None,
     runner: PipelineRunner | None = None,
     run_kind: str | None = None,
+    batch_id: str | None = None,
 ) -> tuple[str, str]:
     """Queue and synchronously execute a run (CLI / tests). Returns (run_id, status)."""
     with tx(actor=requested_by) as conn:
@@ -896,6 +899,7 @@ def run_once(
             requested_by=requested_by,
             reason=reason,
             options=options,
+            batch_id=batch_id,
         )
     with tx() as conn:
         row = fetch_one(

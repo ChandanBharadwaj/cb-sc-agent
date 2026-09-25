@@ -14,9 +14,17 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from croniter import croniter
 
+_EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
+
 
 class ScheduleError(ValueError):
     pass
+
+
+def politeness_grace(min_interval: timedelta) -> timedelta:
+    """Slack for scheduler-tick jitter: a clock-aligned pull that starts a few seconds after its slot must not
+    make the next slot look impolite. Never more than 10% of the interval."""
+    return min(timedelta(minutes=2), min_interval / 10)
 
 
 @dataclass(frozen=True)
@@ -100,11 +108,20 @@ class Schedule:
     def next_after(self, when: datetime) -> datetime:
         if self.kind == "INTERVAL":
             assert self.cadence is not None
-            return when + self.cadence
+            # Clock-aligned: the next multiple of the cadence since the UTC epoch, strictly after ``when``.
+            # Every source with the same cadence falls due in the same scheduler tick, so each scheduled cycle
+            # is one run batch ("every 2 h" = 00:00, 02:00, ... UTC).
+            n = (when.astimezone(UTC) - _EPOCH) // self.cadence + 1
+            return _EPOCH + self.cadence * n
         tz = ZoneInfo(self.timezone)
         it = croniter(self.cron_expr, when.astimezone(tz))
         nxt: datetime = it.get_next(datetime)
         return nxt.astimezone(UTC)
+
+    def next_due(self, now: datetime) -> datetime:
+        """Next slot after a completed pull: the first slot that also respects the politeness interval, so a
+        manual pull at 13:55 skips the 14:00 slot instead of being refused and running alone at 14:25."""
+        return self.next_after(now + self.min_interval - politeness_grace(self.min_interval))
 
     def preview(self, n: int = 5, after: datetime | None = None) -> list[datetime]:
         cur = after or datetime.now(UTC)
@@ -118,8 +135,10 @@ class Schedule:
         if self.kind == "INTERVAL" and self.cadence:
             mins = int(self.cadence.total_seconds() // 60)
             if mins % 1440 == 0:
-                return f"every {mins // 1440} d"
-            if mins % 60 == 0:
-                return f"every {mins // 60} h"
-            return f"every {mins} min"
+                every = f"every {mins // 1440} d"
+            elif mins % 60 == 0:
+                every = f"every {mins // 60} h"
+            else:
+                every = f"every {mins} min"
+            return f"{every} (UTC-aligned)"
         return f"cron {self.cron_expr} {self.timezone}"

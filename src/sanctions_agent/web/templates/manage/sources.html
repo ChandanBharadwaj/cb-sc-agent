@@ -2,7 +2,10 @@
 {% block subtitle %}<div class="sub">Enable, pause or disable sources, change schedules, run ad hoc, and add sources. Every change is versioned and audited.</div>{% endblock %}
 {% block actions %}<a class="btn" href="/ui/manage/settings">Global settings</a><a class="btn" href="/ui/manage/new">Add source</a>{% endblock %}
 {% block content %}
-<div class="card"><div class="table-wrap"><table id="manage-table"><thead><tr>
-  <th>Source</th><th>Status</th><th>Schedule</th><th>Next due</th><th>Last run</th><th>Health</th><th></th>
+<div class="card">
+<div class="row hidden" id="bulk-bar" style="margin-bottom:10px"><span class="sub" id="bulk-count">No sources selected</span>
+  <button class="primary" id="bulk-run" disabled>Run selected</button><button id="bulk-clear" disabled>Clear selection</button></div>
+<div class="table-wrap"><table id="manage-table"><thead><tr>
+  <th class="sel-col"><input type="checkbox" id="sel-all" aria-label="Select all sources" class="hidden"></th><th>Source</th><th>Status</th><th>Schedule</th><th>Next due</th><th>Last run</th><th>Health</th><th></th>
 </tr></thead><tbody></tbody></table></div></div>
 {% endblock %}

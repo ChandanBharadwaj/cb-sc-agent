@@ -155,7 +155,7 @@ def test_operations_console(page):
 
     # live progress over SSE: a queued run appears, progress notifications move the bar and the step
     pg.goto("/ui/runs")
-    expect(pg.locator("#runs-table")).to_contain_text("uk_fcdo")
+    expect(pg.locator("#batches-table")).to_contain_text("uk_fcdo")
     expect(pg.locator("body")).to_have_attribute("data-live", "on")  # SSE stream is listening
     with tx() as conn:
         run_id = runs.enqueue_run(
@@ -166,8 +166,12 @@ def test_operations_console(page):
             requested_by="admin",
             reason="ui test",
         )
-    card = pg.locator(f'.run-live[data-run-id="{run_id}"]')
+        batch_id = str(
+            fetch_one(conn, "SELECT batch_id FROM ingestion_run WHERE run_id = %s", (run_id,))["batch_id"]
+        )
+    card = pg.locator(f'.batch-run[data-run-id="{run_id}"]')
     expect(card).to_contain_text("Queued")
+    expect(pg.locator(f'.batch-live[data-batch-id="{batch_id}"]')).to_contain_text("Ad hoc · admin")
     with tx() as conn:
         notify(
             conn,
@@ -176,6 +180,7 @@ def test_operations_console(page):
                 {
                     "run_id": run_id,
                     "source_id": "un_sc",
+                    "batch_id": batch_id,
                     "status": "RUNNING",
                     "step": "PARSE",
                     "pct": 42,
@@ -188,7 +193,10 @@ def test_operations_console(page):
     expect(card).to_contain_text("2,100 records")
     assert drain() == ["SUCCEEDED"]
     expect(card).to_have_count(0)
-    expect(pg.locator("#runs-table tbody tr").first).to_contain_text("Succeeded")
+    newest = pg.locator("#batches-table tr.batch-row").first
+    expect(newest).to_contain_text("Completed")
+    newest.click()  # expand: the per-source runs of the batch
+    expect(pg.locator("tr.batch-detail").first).to_contain_text("Succeeded")
 
     # data quality: the quarantined UK candidate shows the failing field in red
     pg.goto("/ui/quality")
@@ -288,3 +296,66 @@ def test_management_console(page):
     pg.click("dialog[open] button.primary")
     expect(pg.locator("#n-status")).to_contain_text("Activation requested")
     shot(pg, "add_source")
+
+
+def test_batch_runs_console(page):
+    """Multi-source ad-hoc run from the Runs page and from bulk selection on Sources & schedules."""
+    pg = page
+    with tx() as conn:
+        conn.execute(
+            "UPDATE source SET status = 'PAUSED', status_reason = 'maintenance' WHERE source_id = 'ofac_sdn'"
+        )
+    pg.goto("/ui/runs")
+    expect(pg.locator("body")).to_have_attribute("data-live", "on")
+    pg.click("#run-sources")
+    dlg = pg.locator("dialog[open]")
+    expect(dlg.locator("input[value=ofac_sdn]")).to_be_disabled()  # paused: cannot be selected
+    dlg.locator("input[value=un_sc]").check()
+    dlg.locator("input[value=eu_fsf]").check()
+    expect(dlg.locator("#b-count")).to_have_text("2 selected")
+    dlg.locator("#b-mode").select_option("dry_run")
+    dlg.locator("#b-reason").fill("check parsers against today's files")
+    shot(pg, "batch_dialog")
+    dlg.locator("button.primary").click()
+    pg.wait_for_url("**/ui/runs?batch=*")
+    live = pg.locator(".batch-live")
+    expect(live.locator(".batch-run")).to_have_count(2)
+    expect(live).to_contain_text("0 of 2 done")
+    # EU publisher answers 503 (fails after its retries); UN serves a good file (dry run -> never published)
+    with respx.mock(assert_all_called=False) as rx:
+        rx.get(url__startswith="https://webgate.ec.europa.eu/").mock(return_value=httpx.Response(503))
+        rx.get(UN_URL).mock(return_value=httpx.Response(302, headers={"Location": BLOB}))
+        rx.get(BLOB).mock(
+            return_value=httpx.Response(200, content=(FX / "un/consolidated_v2.xml").read_bytes())
+        )
+        out = []
+        while True:
+            with tx() as conn:
+                row = runs.claim_next(conn, "ui-test", 300)
+            if row is None:
+                break
+            out.append(PipelineRunner(sleep=lambda s: None).execute(row))
+    assert sorted(out) == ["DRY_RUN_OK", "FAILED"]
+    expect(live).to_have_count(0)
+    row = pg.locator("#batches-table tr.batch-row").first
+    expect(row).to_contain_text("Failed")
+    expect(row).to_contain_text("1 ok")
+    expect(row).to_contain_text("1 failed")
+    detail = pg.locator("tr.batch-detail").first  # deep link keeps the new batch expanded
+    expect(detail).to_contain_text("Dry run OK")
+    expect(detail).to_contain_text("EU Financial Sanctions File")
+    shot(pg, "runs_batches")
+
+    # bulk selection on Sources & schedules pre-fills the same dialog
+    pg.goto("/ui/manage")
+    pg.locator("#manage-table input.sel[value=un_sc]").check()
+    pg.locator("#manage-table input.sel[value=uk_fcdo]").check()
+    expect(pg.locator("#bulk-run")).to_have_text("Run selected (2)")
+    shot(pg, "manage_bulk")
+    pg.click("#bulk-run")
+    dlg = pg.locator("dialog[open]")
+    expect(dlg.locator("input[value=un_sc]")).to_be_checked()
+    expect(dlg.locator("input[value=uk_fcdo]")).to_be_checked()
+    expect(dlg.locator("input[value=eu_fsf]")).not_to_be_checked()
+    dlg.get_by_role("button", name="Cancel").click()
+    expect(pg.locator("dialog[open]")).to_have_count(0)

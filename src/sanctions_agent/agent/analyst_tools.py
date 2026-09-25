@@ -77,6 +77,25 @@ def list_runs(
 
 
 @guarded("read")
+def list_run_batches(
+    rc: Ctx, days: int = 7, trigger: str | None = None, status: str | None = None, limit: int = 20
+) -> list[dict[str, Any]]:
+    """Run batches (runs started together): SCHEDULED cycles (clock-aligned, e.g. every 2 h at :00 UTC), AGENT
+    cycles and MANUAL ad-hoc requests. Per batch: sources requested / run / refused, how many ended ok /
+    needing review (held, quarantined) / failed, retried attempts, duration, totals added/changed/removed and a
+    derived status (RUNNING, COMPLETED, NEEDS_REVIEW, FAILED, CANCELLED, REFUSED). Use for 'how did last
+    night's scheduled runs go?' or 'what did alice's ad-hoc run do?'."""
+    return analyst.query(
+        """SELECT batch_id, trigger, requested_by, reason, mode, created_at, requested_sources, sources_requested,
+        sources_run, sources_refused, ok, attention, failed, cancelled, active, retried_attempts, started_at,
+        finished_at, duration_seconds, added, changed, removed, status FROM v_run_batches
+        WHERE created_at > now() - make_interval(days => %s) AND (%s::text IS NULL OR trigger = %s)
+          AND (%s::text IS NULL OR status = %s) ORDER BY created_at DESC LIMIT %s""",
+        (min(days, 90), trigger, trigger, status, status, min(limit, 100)),
+    )
+
+
+@guarded("read")
 def get_counts(rc: Ctx, source_id: str | None = None) -> list[dict[str, Any]]:
     """Current published record counts per source and entity type (PERSON, ORGANIZATION, VESSEL, AIRCRAFT)."""
     return analyst.query(
@@ -215,7 +234,7 @@ def get_review_queue(rc: Ctx) -> list[dict[str, Any]]:
 
 @guarded("read")
 def query_analytics_sql(rc: Ctx, sql: str) -> list[dict[str, Any]]:
-    """Escape hatch: a single SELECT over analytics views (v_source_status, v_run_summary, v_run_progress,
+    """Escape hatch: a single SELECT over analytics views (v_source_status, v_run_batches, v_run_summary, v_run_progress,
     v_version_counts, v_fill_rates, v_quality_metrics, v_change_volume, v_dq_issues, v_enrichment_coverage,
     v_notice_coverage, v_notices, v_removal_holds, v_proposals, v_incidents, v_agent_activity,
     v_agent_tool_usage, v_signals, v_snapshots, v_field_catalog, v_fetch_health). Max 500 rows."""
@@ -231,6 +250,7 @@ ANALYST_FUNCS = [
     get_source_detail,
     get_run_progress,
     list_runs,
+    list_run_batches,
     get_counts,
     get_count_trend,
     get_change_summary,

@@ -25,6 +25,7 @@ from tests.integration.test_pipeline import seeded  # noqa: F401
         "select source_id, count(*) from analytics.v_run_summary where status = 'FAILED' group by 1",
         "WITH x AS (SELECT source_id, fill_rate FROM v_fill_rates WHERE field = 'dob') SELECT * FROM x",
         "SELECT round(avg(duration_seconds), 1) FROM v_run_summary UNION SELECT 1",
+        "SELECT trigger, status, count(*) FROM v_run_batches GROUP BY 1, 2",
     ],
 )
 def test_sql_guard_accepts_aggregate_view_queries(sql):
@@ -89,6 +90,7 @@ def test_analyst_role_reads_views_but_not_raw_tables(db):
     url = get_settings().analyst_database_url
     with psycopg.connect(url) as conn:
         assert conn.execute("SELECT count(*) FROM analytics.v_source_status").fetchone() is not None
+        assert conn.execute("SELECT count(*) FROM analytics.v_run_batches").fetchone() is not None
         conn.rollback()
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             conn.execute("SELECT count(*) FROM sanctions.record_version")

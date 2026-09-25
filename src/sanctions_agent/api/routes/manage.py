@@ -11,8 +11,9 @@ from pydantic import BaseModel, Field
 
 from sanctions_agent.api.auth import Principal, current_principal, require
 from sanctions_agent.api.common import DbJSONResponse, DbRoute
-from sanctions_agent.db.engine import fetch_all, fetch_one, tx
+from sanctions_agent.db.engine import fetch_all, fetch_one, fetch_val, tx
 from sanctions_agent.ops import autopilot, system_settings
+from sanctions_agent.pipeline import runs
 from sanctions_agent.scheduling.schedule import Schedule, ScheduleError
 from sanctions_agent.sources.adapter_types import ADAPTER_TYPES, get_adapter_type
 from sanctions_agent.sources.config_service import ConfigService, ValidationFailed
@@ -299,7 +300,94 @@ def run_now(source_id: str, body: RunRequest, p: Principal = Depends(require("op
             )
     if not res["ok"]:
         raise HTTPException(409, res["why"])
+    with tx() as conn:
+        res["batch_id"] = str(
+            fetch_val(conn, "SELECT batch_id FROM ingestion_run WHERE run_id = %s", (res["run_id"],))
+        )
     return res
+
+
+class BatchRequest(BaseModel):
+    source_ids: list[str] = Field(..., min_length=1, max_length=100)
+    mode: Literal["normal", "force_refetch", "dry_run"] = "normal"
+    reason: str = Field(..., min_length=3, max_length=500)
+    limit: int | None = Field(None, ge=1, le=100000)
+    override_min_interval: bool = False
+
+
+@router.post("/batches", status_code=202)
+def run_batch(body: BatchRequest, p: Principal = Depends(require("operator"))) -> Any:
+    """Ad-hoc run of several sources as ONE batch. Every source goes through the same guards as a single run
+    (status, maintenance, politeness, breaker, one active run); the ones refused are recorded on the batch with
+    the reason, so the request is fully traceable. Re-parse is per source (POST /sources/{id}/runs)."""
+    if body.override_min_interval and not p.has("admin"):
+        raise HTTPException(403, "only an admin can override the politeness interval")
+    options: dict[str, Any] = {}
+    if body.mode == "force_refetch":
+        options["force_refetch"] = True
+    elif body.mode == "dry_run":
+        options["dry_run"] = True
+    if body.limit:
+        options["limit"] = body.limit
+    wanted = list(dict.fromkeys(body.source_ids))
+    with tx(actor=p.user) as conn:
+        known = fetch_all(
+            conn,
+            "SELECT source_id, last_attempt_at FROM source WHERE source_id = ANY(%s) ORDER BY priority, source_id",
+            (wanted,),
+        )
+        missing = sorted(set(wanted) - {r["source_id"] for r in known})
+        if missing:
+            raise HTTPException(422, f"unknown sources: {', '.join(missing)}")
+        batch_options: dict[str, Any] = {"mode": body.mode}
+        if body.limit:
+            batch_options["limit"] = body.limit
+        if body.override_min_interval:
+            batch_options["override_min_interval"] = True
+        batch_id = runs.create_batch(
+            conn,
+            trigger="MANUAL",
+            requested_by=p.user,
+            reason=body.reason,
+            options=batch_options,
+            requested_sources=[r["source_id"] for r in known],
+        )
+        queued: list[dict[str, Any]] = []
+        refused: list[dict[str, Any]] = []
+        now = datetime.now(UTC)
+        for r in known:
+            sid = r["source_id"]
+            if (
+                body.override_min_interval
+                and r["last_attempt_at"]
+                and now - r["last_attempt_at"] < timedelta(minutes=5)
+            ):
+                refused.append(
+                    {"source_id": sid, "why": "even with an override, pulls must be at least 5 minutes apart"}
+                )
+                continue
+            res = autopilot.enqueue_guarded(
+                conn,
+                sid,
+                trigger="MANUAL",
+                requested_by=p.user,
+                reason=body.reason,
+                options=options,
+                ignore_min_interval=body.override_min_interval,
+                batch_id=batch_id,
+            )
+            if not res["ok"]:
+                refused.append({"source_id": sid, "why": res["why"]})
+                continue
+            queued.append({"source_id": sid, "run_id": res["run_id"]})
+            if body.override_min_interval:
+                conn.execute(
+                    "UPDATE ingestion_run SET summary = summary || jsonb_build_object('politeness_override', %s::text)"
+                    " WHERE run_id = %s",
+                    (p.user, res["run_id"]),
+                )
+        runs.record_refused(conn, batch_id, refused)
+    return {"batch_id": batch_id, "queued": queued, "refused": refused}
 
 
 @router.get("/sources/{source_id}/suggest-floors")

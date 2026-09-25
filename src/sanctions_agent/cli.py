@@ -182,12 +182,16 @@ def tick(no_agent: bool = typer.Option(False, help="Autopilot only (no LLM)")) -
 # ================================================================================ runs
 @app.command()
 def run(
-    source: str = typer.Option(..., "--source", "-s"),
+    source: list[str] = typer.Option(
+        ..., "--source", "-s", help="Repeat to run several sources as one batch"
+    ),
     mode: str = typer.Option("normal", help="normal | force_refetch | dry_run"),
     reason: str = typer.Option("manual run from CLI"),
     limit: int = typer.Option(None, help="Enrichment subject limit"),
 ) -> None:
-    """Run one source now, in this process, and print the outcome."""
+    """Run one or more sources now, in this process, as one batch, and print the outcome."""
+    from sanctions_agent.db.engine import fetch_all, tx
+    from sanctions_agent.pipeline import runs
     from sanctions_agent.pipeline.runner import run_once
 
     options: dict[str, Any] = {}
@@ -199,8 +203,43 @@ def run(
         raise typer.BadParameter("mode must be normal, force_refetch or dry_run")
     if limit:
         options["limit"] = limit
-    run_id, status = run_once(source, requested_by=f"cli:{_user()}", reason=reason, options=options)
-    _report_run(run_id, status)
+    user = f"cli:{_user()}"
+    wanted = list(dict.fromkeys(source))
+    with tx(actor=user) as conn:
+        batch_id = runs.create_batch(
+            conn,
+            trigger="MANUAL",
+            requested_by=user,
+            reason=reason,
+            options={"mode": mode},
+            requested_sources=wanted,
+        )
+    results: list[tuple[str, str]] = []
+    for sid in wanted:
+        try:
+            results.append(
+                run_once(sid, requested_by=user, reason=reason, options=options, batch_id=batch_id)
+            )
+        except runs.RunAlreadyActive as e:
+            with tx(actor=user) as conn:
+                runs.record_refused(
+                    conn, batch_id, [{"source_id": sid, "why": f"already running ({e.run_id})"}]
+                )
+            typer.echo(f"{sid}: already running ({e.run_id}) - not queued", err=True)
+    if len(wanted) == 1 and results:
+        _report_run(*results[0])
+        return
+    with tx() as conn:
+        rows = fetch_all(
+            conn,
+            "SELECT source_id, status, duration_seconds, added, changed, removed, error_class"
+            " FROM analytics.v_run_summary WHERE batch_id = %s ORDER BY source_id",
+            (batch_id,),
+        )
+    typer.echo(f"batch {batch_id}")
+    _table(rows, ["source_id", "status", "duration_seconds", "added", "changed", "removed", "error_class"])
+    if any(st in ("FAILED", "QUARANTINED", "ABANDONED") for _, st in results) or len(results) < len(wanted):
+        raise typer.Exit(1)
 
 
 @app.command()
@@ -281,6 +320,11 @@ def status() -> None:
             ORDER BY level, priority, source_id""",
         )
         active = fetch_all(conn, "SELECT source_id, status, current_step, pct FROM analytics.v_run_progress")
+        batches = fetch_all(
+            conn,
+            """SELECT to_char(created_at, 'YYYY-MM-DD HH24:MI') AS created_at, trigger, requested_by, status,
+                      sources_run, ok, attention, failed FROM analytics.v_run_batches ORDER BY 1 DESC LIMIT 5""",
+        )
         pending = fetch_val(conn, "SELECT count(*) FROM proposed_change WHERE status = 'PENDING'")
         incidents = fetch_val(conn, "SELECT count(*) FROM incident WHERE status <> 'RESOLVED'")
     _table(
@@ -298,6 +342,11 @@ def status() -> None:
     )
     typer.echo("\nactive runs:")
     _table(active, ["source_id", "status", "current_step", "pct"])
+    typer.echo("\nrecent batches:")
+    _table(
+        batches,
+        ["created_at", "trigger", "requested_by", "status", "sources_run", "ok", "attention", "failed"],
+    )
     typer.echo(f"\npending reviews: {pending}   open incidents: {incidents}")
 
 

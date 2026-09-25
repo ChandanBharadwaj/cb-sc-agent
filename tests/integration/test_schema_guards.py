@@ -48,12 +48,23 @@ def test_audit_trigger_records_actor(db):
 
 
 def test_one_active_run_per_source(db):
+    insert = """INSERT INTO ingestion_run (source_id, run_kind, trigger, requested_by, batch_id)
+                VALUES ('t_src', 'LIST_INGEST', 'MANUAL', 'u', %s)"""
     with tx() as conn:
         _seed_source(conn)
-        conn.execute(
-            "INSERT INTO ingestion_run (source_id, run_kind, trigger, requested_by) VALUES ('t_src','LIST_INGEST','MANUAL','u')"
+        batch = fetch_val(
+            conn, "INSERT INTO run_batch (trigger, requested_by) VALUES ('MANUAL', 'u') RETURNING batch_id"
         )
+        conn.execute(insert, (batch,))
     with pytest.raises(psycopg.errors.UniqueViolation), tx() as conn:
-        conn.execute(
-            "INSERT INTO ingestion_run (source_id, run_kind, trigger, requested_by) VALUES ('t_src','LIST_INGEST','MANUAL','u')"
-        )
+        conn.execute(insert, (batch,))
+
+
+def test_every_run_belongs_to_a_batch(db):
+    with tx() as conn:
+        _seed_source(conn)
+        with pytest.raises(psycopg.errors.NotNullViolation):
+            conn.execute(
+                "INSERT INTO ingestion_run (source_id, run_kind, trigger, requested_by)"
+                " VALUES ('t_src', 'LIST_INGEST', 'MANUAL', 'u')"
+            )

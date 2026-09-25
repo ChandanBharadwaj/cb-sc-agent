@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from sanctions_agent.db.engine import fetch_one, tx
+from sanctions_agent.pipeline import runs
 from sanctions_agent.pipeline.runner import run_once
 from sanctions_agent.settings import get_settings
 from sanctions_agent.sources.config_service import ConfigService
@@ -50,7 +51,7 @@ def _patch_validation(source_id: str, **changes: Any) -> None:
         )
 
 
-def _load(source_id: str, path: Path, reason: str) -> tuple[str, str]:
+def _load(source_id: str, path: Path, reason: str, batch_id: str | None = None) -> tuple[str, str]:
     sha = sha256_file(path)
     uri = get_blob_store().put_file(path, sha)
     with tx(actor="dev-seed") as conn:
@@ -64,6 +65,7 @@ def _load(source_id: str, path: Path, reason: str) -> tuple[str, str]:
         requested_by="dev-seed",
         reason=reason,
         options={"reparse_sha256": sha, "manual_file": path.name, "manual_load": True},
+        batch_id=batch_id,
     )
 
 
@@ -79,8 +81,28 @@ def main() -> None:
             max_removed_abs=1000,
             drift_policy="warn",
         )
-    for sid, rel in LOADS:
-        run_id, status = _load(sid, FIXTURES / rel, f"dev demo: {rel}")
+    # the first five files arrive as one batch (like one scheduled cycle), the UN update as a second
+    with tx(actor="dev-seed") as conn:
+        first = runs.create_batch(
+            conn,
+            trigger="MANUAL",
+            requested_by="dev-seed",
+            reason="initial load of the official lists",
+            options={"mode": "normal"},
+            requested_sources=[s for s, _ in LOADS[:5]],
+        )
+    for i, (sid, rel) in enumerate(LOADS):
+        if i == 5:  # the UN update arrives later, as its own batch
+            with tx(actor="dev-seed") as conn:
+                first = runs.create_batch(
+                    conn,
+                    trigger="MANUAL",
+                    requested_by="dev-seed",
+                    reason="UN list update",
+                    options={"mode": "normal"},
+                    requested_sources=["un_sc"],
+                )
+        run_id, status = _load(sid, FIXTURES / rel, f"dev demo: {rel}", first)
         print(f"{sid:10s} {rel:32s} {status:12s} {run_id}")
     # a deliberate fill-rate quarantine: the published version stays in screening
     _patch_validation("uk_fcdo", fill_floors={"PERSON.dob": 0.8, "PERSON.passport": 0.9})

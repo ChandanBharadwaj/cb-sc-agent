@@ -205,6 +205,10 @@
       SKIPPED: ['', '–', 'Skipped'], BUDGET_EXCEEDED: ['warning', '$', 'Over budget'], TIMEOUT: ['serious', '!', 'Timed out'],
       REFUSED: ['', '–', 'Declined'],
     },
+    batch: {
+      COMPLETED: ['good', '✓', 'Completed'], NEEDS_REVIEW: ['warning', '!', 'Needs review'], FAILED: ['critical', '✕', 'Failed'],
+      RUNNING: ['info', '▶', 'Running'], CANCELLED: ['', '–', 'Cancelled'], REFUSED: ['', '–', 'Nothing queued'],
+    },
     version: {
       PUBLISHED: ['good', '✓', 'Published'], SUPERSEDED: ['', '–', 'Superseded'], VALIDATED: ['info', '…', 'Validated'],
       HELD: ['warning', '‖', 'Held'], QUARANTINED: ['serious', '!', 'Quarantined'], REJECTED: ['', '✕', 'Rejected'],
@@ -782,52 +786,312 @@
     setInterval(render, 60000);
   }
 
-  // ================================================================ page: runs (list + live)
+  // ================================================================ run batches (shared helpers)
+  const BATCH_TYPE = { SCHEDULED: 'Scheduled cycle', AGENT: 'Agent cycle', MANUAL: 'Ad hoc' };
+  function batchLabel(b) {
+    if (!b) return 'Batch';
+    if (b.trigger === 'SCHEDULED') return `Scheduled cycle · ${fmtTime(b.created_at)}`;
+    if (b.trigger === 'MANUAL') return `Ad hoc · ${b.requested_by}`;
+    return BATCH_TYPE[b.trigger] || b.trigger;
+  }
+
+  function countChip(cls, n, label) {
+    return n ? el('span', { class: `count ${cls}`.trim(), title: label }, `${fmtNum(n)} ${label}`) : null;
+  }
+
+  function batchOutcome(b) {
+    return el('div', { class: 'outcome' }, badge('batch', b.status),
+      countChip('info', b.active, 'running'), countChip('good', b.ok, 'ok'), countChip('warning', b.attention, 'to review'),
+      countChip('critical', b.failed, 'failed'), countChip('', b.cancelled, 'cancelled'));
+  }
+
+  const changeTriple = (r) => (r.added === null && r.changed === null && r.removed === null ? '—'
+    : `${fmtNum(r.added || 0)} / ${fmtNum(r.changed || 0)} / ${fmtNum(r.removed || 0)}`);
+
+  function batchDetail(b, names) {
+    const runsTable = table([
+      { label: 'Source', render: (r) => el('span', {}, names.get(r.source_id) || r.source_id, el('div', { class: 'sub mono' }, r.source_id)) },
+      { label: 'Kind', render: (r) => tag(String(r.run_kind).replaceAll('_', ' ').toLowerCase()) },
+      { label: 'Trigger', render: (r) => String(r.trigger).toLowerCase() },
+      { label: 'Status', render: (r) => badge('run', r.status) },
+      { label: 'Duration', num: true, render: (r) => fmtDur(r.duration_seconds) },
+      { label: '+ / ~ / −', num: true, render: changeTriple },
+      { label: 'Error', render: (r) => (r.error_class ? el('span', { title: r.error_detail || '' }, r.error_class) : null) },
+      { label: 'Attempts', render: (r) => (r.attempts > 1 ? `resumed ×${r.attempts - 1}` : '1') },
+      { label: '', render: (r) => el('a', { href: `/ui/runs/${r.run_id}` }, 'Details') },
+    ], b.runs || [], { empty: 'No source was queued in this batch.', onRowClick: (r) => { window.location.href = `/ui/runs/${r.run_id}`; } });
+    const refused = Array.isArray(b.refused) ? b.refused : [];
+    return el('div', {},
+      runsTable,
+      refused.length ? el('div', { class: 'refused' }, el('strong', {}, `Not queued (${refused.length}): `),
+        refused.map((x) => el('div', {}, el('span', { class: 'mono' }, x.source_id), el('span', { class: 'why' }, ` — ${x.why}`)))) : null,
+      b.reason || b.mode ? el('div', { class: 'sub', style: 'margin-top:8px' }, [b.mode && b.mode !== 'normal' ? `Mode: ${b.mode.replaceAll('_', ' ')}. ` : '', b.reason ? `Reason: ${b.reason}` : '']) : null);
+  }
+
+  // Multi-source ad-hoc run: one submission = one batch. Every source still passes the per-source guards.
+  async function openBatchRunDialog(preselected = []) {
+    const srcs = await api('/api/sources');
+    const chosen = new Set(preselected);
+    const dlg = el('dialog', { class: 'wide' });
+    const form = el('form', { method: 'dialog' });
+    const mode = el('select', { id: 'b-mode' }, [['normal', 'Normal'], ['force_refetch', 'Force re-fetch (ignore conditional GET / same hash)'],
+      ['dry_run', 'Dry run (validate, never publish)']].map(([v, l]) => el('option', { value: v }, l)));
+    const reason = el('input', { id: 'b-reason', maxlength: 500, placeholder: 'Why are you running these now?' });
+    const limit = el('input', { id: 'b-limit', type: 'number', min: 1 });
+    const limitRow = el('label', { class: 'field hidden' }, 'Limit (enrichment subjects per source)', limit);
+    const override = el('input', { type: 'checkbox', id: 'b-override' });
+    const count = el('span', { class: 'sub', id: 'b-count' });
+    const err = el('p', { class: 'error', role: 'alert' });
+    const result = el('div', { class: 'result-list' });
+    const list = el('div', { class: 'checklist', id: 'b-sources' });
+    const boxes = new Map();
+
+    const state = (s) => {
+      if (s.status === 'DRAFT') return mode.value === 'dry_run' ? { ok: true, hint: 'draft — dry run only' } : { ok: false, hint: 'draft — choose dry run to test it' };
+      if (s.status !== 'ACTIVE') return { ok: false, hint: `${String(s.status).toLowerCase()}${s.status_reason ? ` — ${s.status_reason}` : ''}` };
+      if (s.last_attempt_at && s.min_interval_minutes) {
+        const mins = (Date.now() - new Date(s.last_attempt_at).getTime()) / 60000;
+        if (mins < s.min_interval_minutes) return { ok: true, hint: `pulled ${Math.round(mins)} min ago — inside its ${s.min_interval_minutes} min politeness interval, will be refused${can('admin') ? ' unless you override' : ''}` };
+      }
+      return { ok: true, hint: '' };
+    };
+    const refresh = () => {
+      let n = 0;
+      let enrichment = false;
+      for (const s of srcs) {
+        const { box, item, hint } = boxes.get(s.source_id);
+        const st = state(s);
+        box.disabled = !st.ok;
+        if (!st.ok) box.checked = false;
+        item.classList.toggle('off', !st.ok);
+        hint.textContent = st.hint;
+        if (box.checked) { n += 1; if (s.kind === 'ENRICHMENT') enrichment = true; }
+      }
+      count.textContent = `${n} selected`;
+      limitRow.classList.toggle('hidden', !enrichment);
+    };
+    for (const [lvl, title] of [[1, 'Level 1 — official lists'], [2, 'Level 2 — notices & free enrichment']]) {
+      const group = srcs.filter((s) => s.level === lvl);
+      if (!group.length) continue;
+      const all = el('input', { type: 'checkbox', 'aria-label': `Select all ${title}` });
+      all.addEventListener('change', () => { group.forEach((s) => { const b = boxes.get(s.source_id).box; if (!b.disabled) b.checked = all.checked; }); refresh(); });
+      list.append(el('h3', {}, all, title));
+      for (const s of group) {
+        const box = el('input', { type: 'checkbox', value: s.source_id, checked: chosen.has(s.source_id) });
+        box.addEventListener('change', refresh);
+        const hint = el('span', { class: 'hint' });
+        const item = el('label', { class: 'check-item' }, box, el('span', {}, s.display_name, s.status !== 'ACTIVE' ? el('span', {}, ' ', badge('source', s.status)) : null), hint);
+        boxes.set(s.source_id, { box, item, hint });
+        list.append(item);
+      }
+    }
+    mode.addEventListener('change', refresh);
+    const cancel = el('button', { type: 'button' }, 'Cancel');
+    const submit = el('button', { class: 'primary', type: 'submit' }, 'Queue batch');
+    form.append(el('h2', {}, 'Run sources'),
+      el('p', { class: 'sub' }, 'The selected sources run together as one batch. Each one still goes through its own checks (status, politeness interval, circuit breaker, one run at a time); any that cannot start are listed with the reason.'),
+      el('div', { class: 'row' }, el('strong', {}, 'Sources'), el('span', { class: 'spacer' }), count), list,
+      el('div', { class: 'form-grid' }, el('label', { class: 'field' }, 'Mode', mode), limitRow),
+      el('label', { class: 'field', style: 'margin-top:10px' }, 'Reason (required)', reason),
+      can('admin') ? el('label', { class: 'row', style: 'margin-top:8px' }, override, 'Override politeness intervals (admin; pulls stay at least 5 minutes apart)') : null,
+      err, result, el('div', { class: 'row' }, el('span', { class: 'spacer' }), cancel, submit));
+    dlg.append(form);
+    const close = () => { dlg.close(); dlg.remove(); };
+    cancel.addEventListener('click', close);
+    dlg.addEventListener('cancel', () => setTimeout(() => dlg.remove(), 0));
+    form.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      err.textContent = '';
+      const ids = [...boxes.entries()].filter(([, v]) => v.box.checked).map(([k]) => k);
+      if (!ids.length) { err.textContent = 'Select at least one source.'; return; }
+      if (reason.value.trim().length < 3) { err.textContent = 'Give a reason (at least 3 characters).'; return; }
+      submit.disabled = true;
+      try {
+        const body = { source_ids: ids, mode: mode.value, reason: reason.value.trim(), override_min_interval: override.checked };
+        if (limit.value) body.limit = Number(limit.value);
+        const res = await api('/api/batches', { method: 'POST', body });
+        const target = `/ui/runs?batch=${res.batch_id}`;
+        if (!res.refused.length) { window.location.href = target; return; }
+        mount(result,
+          el('div', { class: 'ok-text' }, `Queued ${res.queued.length} of ${ids.length}.`),
+          el('div', {}, el('strong', {}, 'Not queued: '), res.refused.map((x) => el('div', {}, el('span', { class: 'mono' }, x.source_id), ` — ${x.why}`))));
+        submit.textContent = 'Open batch';
+        submit.disabled = false;
+        submit.onclick = (e) => { e.preventDefault(); window.location.href = target; };
+      } catch (e) {
+        err.textContent = e.message;
+        submit.disabled = false;
+      }
+    });
+    document.body.append(dlg);
+    refresh();
+    dlg.showModal();
+  }
+
+  // ================================================================ page: runs (grouped into batches, live)
   async function initRuns() {
     banners();
     if (BODY.dataset.runId) { initRunDetail(BODY.dataset.runId); return; }
-    const liveRuns = new Map();
-    const endedAt = new Map(); // run_id -> when a terminal event arrived
-    const renderLive = () => mount('#live-runs', liveRuns.size ? [...liveRuns.values()].map(liveCard) : el('div', { class: 'empty' }, 'No runs in progress.'));
+    const sources = await api('/api/sources').catch(() => []);
+    const names = new Map(sources.map((s) => [s.source_id, s.display_name]));
+    const fsel = $('#f-source');
+    sources.forEach((s) => fsel.append(el('option', { value: s.source_id }, s.display_name)));
+    if (can('operator')) {
+      $('#run-sources').classList.remove('hidden');
+      $('#run-sources').addEventListener('click', () => openBatchRunDialog());
+    }
+
+    // ---- live: one card per active batch, one row per source; merge snapshots with newer SSE events
+    const liveBatches = new Map(); // batch_id -> { meta, runs: Map(run_id -> run) }
+    const endedAt = new Map();
+    const metaPending = new Set();
+    const cancelBatch = (bid) => formDialog({
+      title: 'Cancel this batch?', intro: 'Queued and running sources are cancelled. A run that is already publishing finishes its atomic publish.',
+      submitLabel: 'Cancel batch', fields: [],
+      onSubmit: async () => { await api(`/api/batches/${bid}/cancel`, { method: 'POST' }); },
+    });
+    const batchCard = (bid, lb) => {
+      const rows = [...lb.runs.values()].sort((a, b) => a.source_id.localeCompare(b.source_id));
+      const done = rows.filter((r) => TERMINAL.has(r.status)).length;
+      return el('div', { class: 'batch-live', dataset: { batchId: bid } },
+        el('div', { class: 'row' }, el('strong', {}, batchLabel(lb.meta)), lb.meta && lb.meta.reason ? el('span', { class: 'sub' }, lb.meta.reason) : null,
+          el('span', { class: 'spacer' }), el('span', { class: 'sub' }, `${done} of ${rows.length} done`),
+          can('operator') && done < rows.length ? el('button', { class: 'small', onclick: () => cancelBatch(bid) }, 'Cancel batch') : null,
+          el('a', { href: `/ui/runs?batch=${bid}` }, 'Details')),
+        rows.map((r) => el('div', { class: 'batch-run', dataset: { runId: r.run_id } },
+          el('span', {}, names.get(r.source_id) || r.source_id),
+          stepPills(r.run_kind, r.current_step, r.status),
+          progressBar(TERMINAL.has(r.status) ? 100 : r.pct),
+          el('span', { class: 'sub' }, progressFacts(r)),
+          badge('run', r.status))));
+    };
+    const renderLive = () => {
+      const entries = [...liveBatches.entries()].sort((a, b) => String((b[1].meta || {}).created_at || '').localeCompare(String((a[1].meta || {}).created_at || '')));
+      mount('#live-batches', entries.length ? entries.map(([bid, lb]) => batchCard(bid, lb)) : el('div', { class: 'empty' }, 'Nothing running.'));
+    };
+    const retire = (bid) => {
+      const lb = liveBatches.get(bid);
+      if (!lb) return;
+      const rows = [...lb.runs.values()];
+      const expected = lb.meta ? lb.meta.sources_run : 0;
+      if (rows.length && rows.length >= expected && rows.every((r) => TERMINAL.has(r.status))) {
+        setTimeout(() => { liveBatches.delete(bid); renderLive(); }, 1200);
+      }
+    };
+    const fetchMeta = async (bid) => {
+      if (metaPending.has(bid)) return;
+      metaPending.add(bid);
+      try {
+        const b = await api(`/api/batches/${bid}`);
+        const lb = liveBatches.get(bid);
+        if (!lb) return;
+        lb.meta = b;
+        for (const r of b.runs || []) {
+          const cur = lb.runs.get(r.run_id);
+          if (!cur) lb.runs.set(r.run_id, { ...r, pct: r.progress_pct });
+        }
+        renderLive();
+        retire(bid);
+      } catch (_) { /* batch vanished: ignore */ } finally { metaPending.delete(bid); }
+    };
     const loadLive = async () => {
-      // merge, don't replace: events that arrive while the snapshot is in flight are newer than it
       const started = Date.now();
-      const d = await api('/api/overview');
+      const [ab, ov] = await Promise.all([api('/api/batches?status=RUNNING&days=30&limit=100'), api('/api/overview')]);
+      const prog = new Map((ov.active_runs || []).map((r) => [r.run_id, r]));
       const next = new Map();
-      (d.active_runs || []).forEach((r) => { if (!((endedAt.get(r.run_id) || 0) >= started)) next.set(r.run_id, r); });
-      liveRuns.forEach((r, id) => { if ((r._at || 0) >= started) next.set(id, r); });
-      liveRuns.clear();
-      next.forEach((r, id) => liveRuns.set(id, r));
+      for (const b of ab.batches) {
+        const m = new Map();
+        for (const r of b.runs || []) {
+          const pr = prog.get(r.run_id);
+          m.set(r.run_id, { ...r, ...(pr || {}), pct: pr ? pr.pct : r.progress_pct });
+        }
+        next.set(b.batch_id, { meta: b, runs: m });
+      }
+      // anything the stream told us after the snapshot was requested is newer than the snapshot
+      liveBatches.forEach((lb, bid) => {
+        lb.runs.forEach((r, rid) => {
+          if ((r._at || 0) < started && (endedAt.get(rid) || 0) < started) return;
+          if (!next.has(bid)) next.set(bid, { meta: lb.meta, runs: new Map() });
+          next.get(bid).runs.set(rid, r);
+        });
+      });
+      liveBatches.clear();
+      next.forEach((v, k) => liveBatches.set(k, v));
       renderLive();
-      const sel = $('#f-source');
-      if (sel.options.length <= 1) (d.sources || []).forEach((s) => sel.append(el('option', { value: s.source_id }, s.display_name)));
+      [...liveBatches.keys()].forEach(retire);
     };
-    const loadHistory = async () => {
-      const q = new URLSearchParams({ limit: '200' });
-      if ($('#f-source').value) q.set('source_id', $('#f-source').value);
+
+    // ---- history: batches, newest first; expand for the per-source runs
+    const expanded = new Set();
+    let pinned = new URLSearchParams(window.location.search).get('batch');
+    let rows = [];
+    let cursor = null;
+    const renderHistory = () => {
+      const tb = $('#batches-table tbody');
+      clear(tb);
+      if (!rows.length) { tb.append(el('tr', {}, el('td', { colspan: 9 }, el('div', { class: 'empty' }, 'No batches match.')))); return; }
+      for (const b of rows) {
+        const open = expanded.has(b.batch_id);
+        const toggle = el('button', { class: 'small toggle', type: 'button', 'aria-expanded': String(open), 'aria-label': open ? 'Hide sources' : 'Show sources' }, open ? '▾' : '▸');
+        const reqd = b.requested_sources || [];
+        const tr = el('tr', { class: 'clickable batch-row', dataset: { batchId: b.batch_id }, tabindex: 0 },
+          el('td', {}, toggle),
+          el('td', { class: 'nowrap' }, fmtTime(b.created_at)),
+          el('td', { class: 'nowrap' }, BATCH_TYPE[b.trigger] || b.trigger, b.mode && b.mode !== 'normal' ? el('div', {}, tag(b.mode.replaceAll('_', ' '))) : null),
+          el('td', { class: 'nowrap' }, b.requested_by),
+          el('td', {}, b.reason || '—'),
+          el('td', {}, `${fmtNum(b.sources_run)} of ${fmtNum(b.sources_requested)}${b.sources_refused ? ` · ${b.sources_refused} not queued` : ''}`,
+            el('div', { class: 'sub' }, reqd.slice(0, 4).join(', ') + (reqd.length > 4 ? ` +${reqd.length - 4}` : ''))),
+          el('td', {}, batchOutcome(b)),
+          el('td', { class: 'num' }, fmtDur(b.duration_seconds)),
+          el('td', { class: 'num' }, changeTriple(b)));
+        const flip = () => { if (expanded.has(b.batch_id)) expanded.delete(b.batch_id); else expanded.add(b.batch_id); renderHistory(); };
+        tr.addEventListener('click', (e) => { if (!e.target.closest('a')) flip(); });
+        tr.addEventListener('keydown', (e) => { if (e.key === 'Enter') flip(); });
+        tb.append(tr);
+        if (open) tb.append(el('tr', { class: 'batch-detail', dataset: { batchId: b.batch_id } }, el('td', { colspan: 9 }, batchDetail(b, names))));
+      }
+    };
+    const loadHistory = async (append = false) => {
+      const q = new URLSearchParams({ limit: '25', days: $('#f-days').value });
+      if ($('#f-trigger').value) q.set('trigger', $('#f-trigger').value);
       if ($('#f-status').value) q.set('status', $('#f-status').value);
-      const rows = await api(`/api/runs?${q}`);
-      fillTbody('#runs-table', [
-        { label: 'Queued', render: (r) => fmtTime(r.queued_at) },
-        { label: 'Source', key: 'source_id' },
-        { label: 'Kind', render: (r) => tag(String(r.run_kind).replaceAll('_', ' ').toLowerCase()) },
-        { label: 'Trigger', render: (r) => String(r.trigger).toLowerCase() },
-        { label: 'By', key: 'requested_by' },
-        { label: 'Status', render: (r) => badge('run', r.status) },
-        { label: 'Duration', num: true, render: (r) => fmtDur(r.duration_seconds) },
-        { label: '+ / ~ / −', num: true, render: (r) => (r.added === null && r.changed === null && r.removed === null ? '—' : `${fmtNum(r.added || 0)} / ${fmtNum(r.changed || 0)} / ${fmtNum(r.removed || 0)}`) },
-        { label: 'Error', render: (r) => (r.error_class ? el('span', { title: r.error_detail || '' }, r.error_class) : null) },
-      ], rows, { onRowClick: (r) => { window.location.href = `/ui/runs/${r.run_id}`; }, empty: 'No runs match.' });
+      if (fsel.value) q.set('source_id', fsel.value);
+      if (append && cursor) q.set('before', cursor);
+      const d = await api(`/api/batches?${q}`);
+      cursor = d.next_before;
+      $('#load-more').classList.toggle('hidden', !cursor);
+      rows = append ? rows.concat(d.batches) : d.batches;
+      if (pinned && !rows.some((b) => b.batch_id === pinned)) {
+        try { rows.unshift(await api(`/api/batches/${pinned}`)); } catch (_) { pinned = null; }
+      }
+      if (pinned) expanded.add(pinned);
+      renderHistory();
+      if (pinned) {
+        const target = $(`tr.batch-row[data-batch-id="${CSS.escape(pinned)}"]`);
+        if (target) target.scrollIntoView({ block: 'center' });
+        pinned = null;
+      }
     };
-    $('#f-source').addEventListener('change', loadHistory);
-    $('#f-status').addEventListener('change', loadHistory);
-    await loadLive().catch((e) => mount('#live-runs', errorBox(e)));
-    await loadHistory().catch((e) => mount('#runs-table tbody', el('tr', {}, el('td', { colspan: 9 }, errorBox(e)))));
-    const refreshHistory = debounce(loadHistory, 1000);
+    ['#f-trigger', '#f-status', '#f-source', '#f-days'].forEach((s) => $(s).addEventListener('change', () => loadHistory().catch(() => {})));
+    $('#load-more').addEventListener('click', () => loadHistory(true).catch(() => {}));
+    await loadLive().catch((e) => mount('#live-batches', errorBox(e)));
+    await loadHistory().catch((e) => mount('#batches-table tbody', el('tr', {}, el('td', { colspan: 9 }, errorBox(e)))));
+    const refreshHistory = debounce(() => loadHistory().catch(() => {}), 1000);
     onProgress((p) => {
-      if (TERMINAL.has(p.status)) { endedAt.set(p.run_id, Date.now()); liveRuns.delete(p.run_id); renderLive(); refreshHistory(); return; }
-      const prev = liveRuns.get(p.run_id) || {};
-      liveRuns.set(p.run_id, { ...prev, ...p, current_step: p.step || prev.current_step, _at: Date.now() });
+      const bid = p.batch_id;
+      if (!bid) { loadLive().catch(() => {}); return; }
+      let lb = liveBatches.get(bid);
+      if (!lb) {
+        if (TERMINAL.has(p.status)) { refreshHistory(); return; }
+        lb = { meta: null, runs: new Map() };
+        liveBatches.set(bid, lb);
+        fetchMeta(bid);
+      }
+      const prev = lb.runs.get(p.run_id) || { run_kind: 'LIST_INGEST' };
+      const step = p.step && p.step !== 'DONE' ? p.step : prev.current_step;
+      lb.runs.set(p.run_id, { ...prev, ...p, current_step: step, _at: Date.now() });
+      if (TERMINAL.has(p.status)) { endedAt.set(p.run_id, Date.now()); refreshHistory(); retire(bid); }
       if (p.status === 'QUEUED') refreshHistory();
       renderLive();
     }, () => { loadLive().catch(() => {}); refreshHistory(); });
@@ -855,6 +1119,7 @@
           ['Trigger', `${String(r.trigger).toLowerCase()} by ${r.requested_by || 'system'}`], ['Reason', r.reason],
           ['Options', Object.keys(r.options || {}).length ? JSON.stringify(r.options) : null],
           ['Queued / started / finished', `${fmtTime(r.queued_at)} / ${fmtTime(r.started_at)} / ${fmtTime(r.finished_at)}`],
+          ['Batch', d.batch ? el('a', { href: `/ui/runs?batch=${d.batch.batch_id}` }, `${batchLabel(d.batch)} · ${d.batch.sources_run} source(s) · `, badge('batch', d.batch.status)) : null],
           ['Attempt', r.attempt], ['Config version', r.config_version],
           ['Resumed from', r.resumed_from_run_id ? el('a', { href: `/ui/runs/${r.resumed_from_run_id}` }, short(r.resumed_from_run_id)) : null],
           ['Agent cycle', r.agent_cycle_id ? el('a', { href: '/ui/agent' }, short(r.agent_cycle_id)) : null],
@@ -1232,6 +1497,27 @@
 
   // ================================================================ page: manage — sources list
   async function initManageList() {
+    const selected = new Set();
+    const operator = can('operator');
+    const syncBulk = () => {
+      if (!operator) return;
+      $('#bulk-count').textContent = selected.size ? `${selected.size} source(s) selected` : 'No sources selected';
+      $('#bulk-run').disabled = !selected.size;
+      $('#bulk-clear').disabled = !selected.size;
+      $('#bulk-run').textContent = selected.size ? `Run selected (${selected.size})` : 'Run selected';
+      const boxes = $$('#manage-table input.sel');
+      $('#sel-all').checked = boxes.length > 0 && boxes.every((b) => b.checked);
+    };
+    if (operator) {
+      $('#bulk-bar').classList.remove('hidden');
+      $('#sel-all').classList.remove('hidden');
+      $('#sel-all').addEventListener('change', (e) => {
+        $$('#manage-table input.sel').forEach((b) => { b.checked = e.target.checked; if (b.checked) selected.add(b.value); else selected.delete(b.value); });
+        syncBulk();
+      });
+      $('#bulk-run').addEventListener('click', () => openBatchRunDialog([...selected]));
+      $('#bulk-clear').addEventListener('click', () => { selected.clear(); $$('#manage-table input.sel').forEach((b) => { b.checked = false; }); syncBulk(); });
+    }
     const load = async () => {
       const [srcs, runs] = await Promise.all([api('/api/sources'), api('/api/runs?limit=500')]);
       const lastRun = new Map();
@@ -1243,6 +1529,8 @@
         rows.push(s);
       }
       fillTbody('#manage-table', [
+        { label: '', render: (s) => (operator ? el('input', { type: 'checkbox', class: 'sel', value: s.source_id, checked: selected.has(s.source_id),
+          'aria-label': `Select ${s.display_name}`, onchange: (e) => { if (e.target.checked) selected.add(s.source_id); else selected.delete(s.source_id); syncBulk(); } }) : null) },
         { label: 'Source', render: (s) => el('div', {}, el('a', { href: `/ui/manage/sources/${s.source_id}` }, s.display_name), s.is_core ? el('span', {}, ' ', tag('core')) : null,
           el('div', { class: 'sub mono' }, `${s.source_id} · ${s.adapter_type}`)) },
         { label: 'Status', render: (s) => el('div', {}, badge('source', s.status),
@@ -1254,8 +1542,9 @@
         { label: 'Health', render: (s) => badge('health', s.health) },
         { label: '', render: (s) => sourceActions(s, load) },
       ], rows, { empty: 'No sources configured — run `sanctions-agent sources import`.' });
+      syncBulk();
     };
-    await load().catch((e) => mount('#manage-table tbody', el('tr', {}, el('td', { colspan: 7 }, errorBox(e)))));
+    await load().catch((e) => mount('#manage-table tbody', el('tr', {}, el('td', { colspan: 8 }, errorBox(e)))));
     const refresh = debounce(() => load().catch(() => {}), 1200);
     onProgress((p) => { if (TERMINAL.has(p.status) || p.status === 'QUEUED') refresh(); }, refresh);
   }

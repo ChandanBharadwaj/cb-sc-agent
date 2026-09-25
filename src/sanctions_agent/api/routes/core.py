@@ -4,6 +4,7 @@ snapshots, Q&A and on-demand enrichment."""
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime
 from typing import Any
 
 import psycopg
@@ -119,14 +120,107 @@ def get_run(run_id: str, _: Principal = Depends(current_principal)) -> Any:
             if run["version_id"]
             else []
         )
+        batch = fetch_one(
+            conn,
+            "SELECT batch_id, trigger, requested_by, reason, created_at, sources_run, status"
+            " FROM analytics.v_run_batches WHERE batch_id = %s",
+            (run["batch_id"],),
+        )
     return {
         "run": run,
+        "batch": batch,
         "steps": steps,
         "evidence": evidence,
         "version": version,
         "issues": issues,
         "changes": changes,
     }
+
+
+# ------------------------------------------------------------------ batches ---------------------
+def _batch_runs(
+    conn: Any, batch_ids: list[Any], *, all_attempts: bool = False
+) -> dict[str, list[dict[str, Any]]]:
+    """Per-source runs of these batches: the latest attempt per source (or every attempt), with attempt counts."""
+    rows = fetch_all(
+        conn,
+        f"""SELECT {"" if all_attempts else "DISTINCT ON (s.batch_id, s.source_id)"} s.*,
+                   (SELECT count(*) FROM ingestion_run a WHERE a.batch_id = s.batch_id AND a.source_id = s.source_id)
+                     AS attempts
+            FROM analytics.v_run_summary s WHERE s.batch_id = ANY(%s)
+            ORDER BY s.batch_id, s.source_id, s.queued_at DESC, s.attempt DESC""",
+        (batch_ids,),
+    )
+    out: dict[str, list[dict[str, Any]]] = {}
+    for r in rows:
+        out.setdefault(str(r["batch_id"]), []).append(r)
+    return out
+
+
+@router.get("/batches")
+def list_batches(
+    trigger: str | None = None,
+    status: str | None = None,
+    source_id: str | None = None,
+    days: int = Query(30, ge=1, le=365),
+    limit: int = Query(25, ge=1, le=200),
+    before: datetime | None = None,
+    _: Principal = Depends(current_principal),
+) -> Any:
+    """Run batches, newest first, each with its per-source runs. ``before`` pages (pass ``next_before``)."""
+    with tx() as conn:
+        rows = fetch_all(
+            conn,
+            """SELECT b.*, rb.refused FROM analytics.v_run_batches b JOIN run_batch rb USING (batch_id)
+               WHERE b.created_at > now() - make_interval(days => %s)
+                 AND (%s::timestamptz IS NULL OR b.created_at < %s)
+                 AND (%s::text IS NULL OR b.trigger = %s)
+                 AND (%s::text IS NULL OR b.status = %s)
+                 AND (%s::text IS NULL OR %s = ANY(b.requested_sources))
+               ORDER BY b.created_at DESC LIMIT %s""",
+            (days, before, before, trigger, trigger, status, status, source_id, source_id, limit),
+        )
+        by_batch = _batch_runs(conn, [r["batch_id"] for r in rows])
+    for r in rows:
+        r["runs"] = by_batch.get(str(r["batch_id"]), [])
+    return {"batches": rows, "next_before": rows[-1]["created_at"] if len(rows) == limit else None}
+
+
+@router.get("/batches/{batch_id}")
+def get_batch(batch_id: str, _: Principal = Depends(current_principal)) -> Any:
+    with tx() as conn:
+        b = fetch_one(
+            conn,
+            "SELECT b.*, rb.refused FROM analytics.v_run_batches b JOIN run_batch rb USING (batch_id)"
+            " WHERE batch_id = %s",
+            (batch_id,),
+        )
+        if b is None:
+            raise HTTPException(404, "batch not found")
+        b["runs"] = _batch_runs(conn, [b["batch_id"]]).get(str(b["batch_id"]), [])
+        b["attempts"] = _batch_runs(conn, [b["batch_id"]], all_attempts=True).get(str(b["batch_id"]), [])
+    return b
+
+
+@router.post("/batches/{batch_id}/cancel")
+def cancel_batch(batch_id: str, p: Principal = Depends(require("operator"))) -> Any:
+    """Cancel every queued or running run of the batch (cooperative; publish is atomic)."""
+    with tx(actor=p.user) as conn:
+        active = fetch_all(
+            conn,
+            "SELECT run_id, source_id FROM ingestion_run WHERE batch_id = %s AND status IN ('QUEUED','RUNNING')",
+            (batch_id,),
+        )
+        return {
+            "results": [
+                {
+                    "source_id": r["source_id"],
+                    "run_id": str(r["run_id"]),
+                    "result": runs.request_cancel(conn, str(r["run_id"]), p.user),
+                }
+                for r in active
+            ]
+        }
 
 
 @router.post("/runs/{run_id}/cancel")

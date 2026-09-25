@@ -29,6 +29,11 @@ Every change records the user in `audit_log`, `source_config_version.changed_by`
 
 **Schedule**
 * An interval, or cron with a timezone. The editor previews the next five runs.
+* **Intervals are clock-aligned to UTC.** "Every 2 h" means 00:00, 02:00, 04:00 … UTC, and
+  every source with the same interval falls due in the same scheduler cycle, so a scheduled cycle appears as
+  one batch on *Runs & progress*. After a pull, the next run is the first aligned slot that also respects the
+  politeness interval, so a manual pull at 13:55 skips the 14:00 slot rather than being refused. Use cron if a
+  source needs a specific local time.
 * **Politeness floor.** Each adapter type has a hard minimum interval in code (for example 30 min for
   OFAC/UK/EU, 60 min for UN). Neither the cadence nor the minimum interval can go below it.
 * **Staleness thresholds.** "Warn if stale" and "page if stale" drive the health badge, incidents and the
@@ -51,9 +56,35 @@ Every change records the user in `audit_log`, `source_config_version.changed_by`
 
 **History** lists every version with its diff. **Roll back** creates a new version; it never edits in place.
 
-## Ad-hoc runs
+## Ad-hoc runs and batches
 
-Run now takes a mandatory reason, and each mode has its own rules:
+Runs are grouped into **batches**: the sources started together. A batch is one of three things:
+* **Scheduled cycle:** the sources that fell due in the same tick, plus any watchdog or signal pulls in
+  that tick.
+* **Agent cycle:** everything one supervisor-agent cycle queued, including requests the guards refused.
+* **Ad hoc:** one request by a person.
+
+*Runs & progress* lists batches. Expand one to see each source's result. A batch's outcome is derived from
+its runs:
+* **Completed:** every source ended OK.
+* **Needs review:** something was held or quarantined.
+* **Failed:** something failed.
+* **Cancelled.**
+* **Nothing queued:** every selected source was refused.
+
+A crash-recovered run stays in its original batch as a further attempt.
+
+To run several sources at once, use **Run sources…** on *Runs & progress*, or tick sources on *Sources &
+schedules* and press **Run selected**. The dialog:
+* disables paused and disabled sources;
+* allows DRAFT sources only in dry-run mode;
+* warns about sources still inside their politeness interval.
+
+Each selected source goes through its own guards. Sources that cannot start are recorded on the batch with
+the reason, so the request is fully traceable. An operator can **cancel a whole batch**. Re-parse needs a
+specific archived file, so it stays a per-source action (*Run now* on a source).
+
+Run now (single source) takes a mandatory reason, and each mode has its own rules:
 * **Normal** respects the politeness interval. An admin may override it, but never below 5 minutes, and
   the override is recorded on the run.
 * **Force re-fetch** ignores conditional GET and the same-hash shortcut.

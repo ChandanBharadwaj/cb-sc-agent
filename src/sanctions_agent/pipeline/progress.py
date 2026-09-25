@@ -24,9 +24,12 @@ LIST_STEPS = ["FETCH", "ARCHIVE", "VALIDATE_FILE", "PARSE", "VALIDATE_DATA", "DI
 
 
 class ProgressReporter:
-    def __init__(self, run_id: str, source_id: str, steps: list[str] | None = None) -> None:
+    def __init__(
+        self, run_id: str, source_id: str, steps: list[str] | None = None, batch_id: str | None = None
+    ) -> None:
         self.run_id = run_id
         self.source_id = source_id
+        self.batch_id = batch_id
         self.steps = steps or LIST_STEPS
         self.state: dict[str, Any] = {"step": None, "retries": 0}
         self._last_write = 0.0
@@ -69,7 +72,13 @@ class ProgressReporter:
                 conn,
                 "run_progress",
                 json.dumps(
-                    {"run_id": self.run_id, "source_id": self.source_id, "status": "RUNNING", **payload},
+                    {
+                        "run_id": self.run_id,
+                        "source_id": self.source_id,
+                        "batch_id": self.batch_id,
+                        "status": "RUNNING",
+                        **payload,
+                    },
                     default=str,
                 ),
             )

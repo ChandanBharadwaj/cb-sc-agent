@@ -32,7 +32,7 @@ def on_success(
     row = fetch_one(conn, "SELECT * FROM source WHERE source_id = %s FOR UPDATE", (source_id,))
     assert row is not None
     now = datetime.now(UTC)
-    nxt = Schedule.from_row(row).next_after(now)
+    nxt = Schedule.from_row(row).next_due(now)
     conn.execute(
         """UPDATE source SET last_success_at = CASE WHEN %s THEN %s ELSE last_success_at END,
                last_attempt_at = CASE WHEN %s THEN %s ELSE last_attempt_at END,
@@ -57,7 +57,7 @@ def on_data_problem(conn: psycopg.Connection[Any], source_id: str, *, fetched: b
     now = datetime.now(UTC)
     conn.execute(
         "UPDATE source SET last_attempt_at = %s, last_fetch_at = %s, next_due_at = %s WHERE source_id = %s",
-        (now, now, Schedule.from_row(row).next_after(now), source_id),
+        (now, now, Schedule.from_row(row).next_due(now), source_id),
     )
 
 

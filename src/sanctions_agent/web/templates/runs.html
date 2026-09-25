@@ -1,16 +1,22 @@
 {% extends "base.html" %}
-{% block subtitle %}<div class="sub">Runs in progress update live (Server-Sent Events). Click a run for steps, evidence and validation.</div>{% endblock %}
+{% block subtitle %}<div class="sub">A batch groups the sources started together: a scheduled cycle, an agent cycle, or an ad-hoc request. Progress updates live.</div>{% endblock %}
+{% block actions %}<button class="primary hidden" id="run-sources">Run sources…</button>{% endblock %}
 {% block content %}
-<div class="card"><h2>In progress</h2><div id="live-runs"><div class="empty">No runs in progress.</div></div></div>
+<div class="card"><h2>In progress</h2><div id="live-batches"><div class="empty">Nothing running.</div></div></div>
 <div class="card">
   <div class="row" style="margin-bottom:10px"><h2 style="margin:0">History</h2><span class="spacer"></span>
-    <select id="f-source"><option value="">All sources</option></select>
-    <select id="f-status"><option value="">All statuses</option>
-      <option>SUCCEEDED</option><option>NO_CHANGE</option><option>FAILED</option><option>QUARANTINED</option>
-      <option>HELD</option><option>DRY_RUN_OK</option><option>CANCELLED</option><option>ABANDONED</option></select>
+    <select id="f-trigger" aria-label="Batch type"><option value="">All types</option><option value="SCHEDULED">Scheduled cycles</option>
+      <option value="AGENT">Agent cycles</option><option value="MANUAL">Ad hoc</option></select>
+    <select id="f-status" aria-label="Outcome"><option value="">All outcomes</option><option value="COMPLETED">Completed</option>
+      <option value="NEEDS_REVIEW">Needs review</option><option value="FAILED">Failed</option><option value="RUNNING">Running</option>
+      <option value="CANCELLED">Cancelled</option><option value="REFUSED">Nothing queued</option></select>
+    <select id="f-source" aria-label="Contains source"><option value="">Any source</option></select>
+    <select id="f-days" aria-label="Period"><option value="1">Last 24 h</option><option value="7" selected>Last 7 days</option>
+      <option value="30">Last 30 days</option><option value="90">Last 90 days</option></select>
   </div>
-  <div class="table-wrap"><table id="runs-table"><thead><tr>
-    <th>Queued</th><th>Source</th><th>Kind</th><th>Trigger</th><th>By</th><th>Status</th>
-    <th class="num">Duration</th><th class="num">+ / ~ / −</th><th>Error</th></tr></thead><tbody></tbody></table></div>
+  <div class="table-wrap"><table id="batches-table"><thead><tr>
+    <th></th><th>Started</th><th>Type</th><th>By</th><th>Reason</th><th>Sources</th><th>Outcome</th><th class="num">Duration</th><th class="num">+ / ~ / −</th>
+  </tr></thead><tbody></tbody></table></div>
+  <div class="row" style="margin-top:10px"><span class="spacer"></span><button id="load-more" class="hidden">Load more</button></div>
 </div>
 {% endblock %}

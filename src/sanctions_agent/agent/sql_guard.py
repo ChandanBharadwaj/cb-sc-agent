@@ -13,6 +13,7 @@ from sqlglot import exp
 ALLOWED_VIEWS = {
     "v_source_status",
     "v_run_summary",
+    "v_run_batches",
     "v_run_progress",
     "v_version_counts",
     "v_fill_rates",

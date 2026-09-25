@@ -23,6 +23,78 @@ TERMINAL = ("SUCCEEDED", "NO_CHANGE", "DRY_RUN_OK", "HELD", "QUARANTINED", "FAIL
 MAX_RESUMES = 3
 
 
+# ---------------------------------------------------------------------------------------------
+# Batches: the per-source runs started together (one scheduled cycle, one agent cycle, one ad-hoc request)
+# ---------------------------------------------------------------------------------------------
+def batch_trigger(run_trigger: str) -> str:
+    return {"AGENT": "AGENT", "MANUAL": "MANUAL"}.get(run_trigger, "SCHEDULED")
+
+
+def create_batch(
+    conn: psycopg.Connection[Any],
+    *,
+    trigger: str,
+    requested_by: str,
+    reason: str | None = None,
+    options: dict[str, Any] | None = None,
+    agent_cycle_id: str | None = None,
+    requested_sources: list[str] | tuple[str, ...] = (),
+) -> str:
+    return str(
+        fetch_val(
+            conn,
+            """INSERT INTO run_batch (trigger, requested_by, reason, options, requested_sources, agent_cycle_id)
+               VALUES (%s, %s, %s, %s, %s, %s) RETURNING batch_id""",
+            (trigger, requested_by, reason, jsonb(options or {}), list(requested_sources), agent_cycle_id),
+        )
+    )
+
+
+def _note_requested(conn: psycopg.Connection[Any], batch_id: str, source_ids: list[str]) -> None:
+    conn.execute(
+        """UPDATE run_batch SET requested_sources = requested_sources
+               || ARRAY(SELECT unnest(%s::text[]) EXCEPT SELECT unnest(requested_sources))
+           WHERE batch_id = %s""",
+        (source_ids, batch_id),
+    )
+
+
+def record_refused(conn: psycopg.Connection[Any], batch_id: str, refused: list[dict[str, Any]]) -> None:
+    """Sources the requester asked for that could not be queued, with the guard's reason."""
+    if refused:
+        _note_requested(conn, batch_id, [r["source_id"] for r in refused])
+        conn.execute(
+            "UPDATE run_batch SET refused = refused || %s WHERE batch_id = %s", (jsonb(refused), batch_id)
+        )
+
+
+def batch_for_cycle(conn: psycopg.Connection[Any], cycle_id: str, requested_by: str) -> str:
+    """The one batch that groups every run an agent cycle starts."""
+    existing = fetch_val(
+        conn, "SELECT batch_id FROM run_batch WHERE agent_cycle_id = %s AND trigger = 'AGENT'", (cycle_id,)
+    )
+    if existing:
+        return str(existing)
+    return create_batch(
+        conn, trigger="AGENT", requested_by=requested_by, reason="agent cycle", agent_cycle_id=cycle_id
+    )
+
+
+class BatchRef:
+    """A batch created on first use, so a scheduler tick that queues nothing leaves no empty batch."""
+
+    def __init__(self, *, trigger: str, requested_by: str, reason: str | None = None) -> None:
+        self.trigger, self.requested_by, self.reason = trigger, requested_by, reason
+        self.batch_id: str | None = None
+
+    def get(self, conn: psycopg.Connection[Any]) -> str:
+        if self.batch_id is None:
+            self.batch_id = create_batch(
+                conn, trigger=self.trigger, requested_by=self.requested_by, reason=self.reason
+            )
+        return self.batch_id
+
+
 class RunAlreadyActive(Exception):
     def __init__(self, run_id: str) -> None:
         super().__init__(f"source already has an active run {run_id}")
@@ -43,8 +115,11 @@ def enqueue_run(
     resumed_from_run_id: str | None = None,
     parent_run_id: str | None = None,
     attempt: int = 1,
+    batch_id: str | BatchRef | None = None,
 ) -> str:
-    """Queue a run. Raises RunAlreadyActive (with the active run id) if the source is busy."""
+    """Queue a run. Raises RunAlreadyActive (with the active run id) if the source is busy.
+
+    ``batch_id`` groups it with other runs started together; without one the run is a batch of one."""
     existing = fetch_val(
         conn,
         "SELECT run_id FROM ingestion_run WHERE source_id = %s AND status IN ('QUEUED','RUNNING')",
@@ -52,14 +127,28 @@ def enqueue_run(
     )
     if existing:
         raise RunAlreadyActive(str(existing))
+    if isinstance(batch_id, BatchRef):
+        batch_id = batch_id.get(conn)
+    if batch_id is not None:
+        _note_requested(conn, batch_id, [source_id])
+    else:
+        batch_id = create_batch(
+            conn,
+            trigger=batch_trigger(trigger),
+            requested_by=requested_by,
+            reason=reason,
+            options=options,
+            agent_cycle_id=agent_cycle_id,
+            requested_sources=[source_id],
+        )
     cfg_version = fetch_val(conn, "SELECT config_version FROM source WHERE source_id = %s", (source_id,))
     try:
         with conn.transaction():
             run_id = fetch_val(
                 conn,
                 """INSERT INTO ingestion_run (source_id, run_kind, trigger, requested_by, reason, options, not_before,
-                       agent_cycle_id, resumed_from_run_id, parent_run_id, attempt, config_version)
-                   VALUES (%s,%s,%s,%s,%s,%s,coalesce(%s, now()),%s,%s,%s,%s,%s) RETURNING run_id""",
+                       agent_cycle_id, resumed_from_run_id, parent_run_id, attempt, config_version, batch_id)
+                   VALUES (%s,%s,%s,%s,%s,%s,coalesce(%s, now()),%s,%s,%s,%s,%s,%s) RETURNING run_id""",
                 (
                     source_id,
                     run_kind,
@@ -73,6 +162,7 @@ def enqueue_run(
                     parent_run_id,
                     attempt,
                     cfg_version,
+                    batch_id,
                 ),
             )
     except psycopg.errors.UniqueViolation as e:
@@ -83,7 +173,9 @@ def enqueue_run(
         )
         raise RunAlreadyActive(str(active)) from e
     notify(
-        conn, "run_progress", json.dumps({"run_id": str(run_id), "source_id": source_id, "status": "QUEUED"})
+        conn,
+        "run_progress",
+        json.dumps({"run_id": str(run_id), "source_id": source_id, "status": "QUEUED", "batch_id": batch_id}),
     )
     return str(run_id)
 
@@ -208,8 +300,19 @@ def finish_run(
            WHERE run_id = %s""",
         (status, error_class, (error_detail or "")[:4000] or None, jsonb(summary or {}), run_id),
     )
-    src = fetch_val(conn, "SELECT source_id FROM ingestion_run WHERE run_id = %s", (run_id,))
-    notify(conn, "run_progress", json.dumps({"run_id": run_id, "source_id": src, "status": status}))
+    row = fetch_one(conn, "SELECT source_id, batch_id FROM ingestion_run WHERE run_id = %s", (run_id,))
+    notify(
+        conn,
+        "run_progress",
+        json.dumps(
+            {
+                "run_id": run_id,
+                "source_id": row["source_id"] if row else None,
+                "status": status,
+                "batch_id": str(row["batch_id"]) if row else None,
+            }
+        ),
+    )
 
 
 def reclaim_abandoned(conn: psycopg.Connection[Any]) -> list[dict[str, Any]]:
@@ -224,7 +327,7 @@ def reclaim_abandoned(conn: psycopg.Connection[Any]) -> list[dict[str, Any]]:
                error_detail = 'worker lease expired (process died or hung); resuming from checkpoint'
            WHERE status = 'RUNNING' AND lease_expires_at < now()
            RETURNING run_id, source_id, run_kind, trigger, requested_by, reason, options, attempt, agent_cycle_id,
-                     resumed_from_run_id""",
+                     resumed_from_run_id, batch_id""",
     )
     for r in rows:
         chain = int(
@@ -251,6 +354,7 @@ def reclaim_abandoned(conn: psycopg.Connection[Any]) -> list[dict[str, Any]]:
                     agent_cycle_id=r["agent_cycle_id"],
                     resumed_from_run_id=str(r["run_id"]),
                     attempt=r["attempt"] + 1,
+                    batch_id=str(r["batch_id"]),  # the resumed attempt stays in its original batch
                 )
             except RunAlreadyActive:
                 new_id = None

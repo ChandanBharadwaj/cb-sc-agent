@@ -72,6 +72,17 @@ REMOVAL_CONFIRMATION proposal with a recommendation. The reviewer picks one outc
 * **ID change, not a removal:** the publisher re-keyed the entry.
 * **Parser problem:** keep blocking until the file is re-parsed.
 
+## A batch needs review or failed
+
+On *Runs & progress*, expand the batch. Each source row links to its run.
+* **Failed** (red): handle each failed source with the incident table above. Usually these are fetch
+  errors; the breaker and retries are already working on them.
+* **Needs review** (amber): a source was quarantined or held. See [quarantined version](#a-version-was-quarantined)
+  and [held large change](#a-large-change-is-held).
+* **Not queued:** a source the requester selected was refused. The reason is shown: paused, politeness
+  interval, breaker open, or already running. Nothing is wrong with the data. Re-run it later or ask an admin
+  for a politeness override.
+
 ## Circuit breaker open / repeated fetch failures
 
 After repeated failures the breaker opens and retries back off, up to 6 h. A single probe then runs

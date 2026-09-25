@@ -354,5 +354,100 @@ def test_ask_refuses_row_level_questions_without_calling_a_model(client):
 
 def test_health_ready_metrics(client):
     assert client.get("/health").json() == {"status": "ok"}
-    assert client.get("/ready").json()["schema"] == "0002_analytics"
+    assert client.get("/ready").json()["schema"] == "0003_run_batches"
     assert "sanctions_db_up 1.0" in client.get("/metrics").text
+
+
+# ------------------------------------------------------------------ batches -----------------------------
+def test_multi_source_ad_hoc_run_is_one_batch_with_refusals_recorded(client):
+    client.post(
+        "/api/sources/uk_fcdo/status", json={"status": "PAUSED", "reason": "publisher outage"}, **as_("op")
+    )
+    body = {"source_ids": ["un_sc", "eu_fsf", "uk_fcdo"], "mode": "dry_run", "reason": "check parsers"}
+    assert client.post("/api/batches", json=body, **as_("view")).status_code == 403
+    r = client.post("/api/batches", json=body, **as_("op"))
+    assert r.status_code == 202
+    res = r.json()
+    assert sorted(q["source_id"] for q in res["queued"]) == ["eu_fsf", "un_sc"]
+    assert [(x["source_id"], "PAUSED" in x["why"]) for x in res["refused"]] == [("uk_fcdo", True)]
+    b = client.get(f"/api/batches/{res['batch_id']}", **as_("view")).json()
+    assert b["trigger"] == "MANUAL" and b["requested_by"] == "op" and b["mode"] == "dry_run"
+    assert b["sources_requested"] == 3 and b["sources_run"] == 2 and b["sources_refused"] == 1
+    assert b["status"] == "RUNNING" and {r_["source_id"] for r_ in b["runs"]} == {"un_sc", "eu_fsf"}
+    assert all(r_["batch_id"] == res["batch_id"] for r_ in b["runs"])
+    with tx() as conn:
+        opts = fetch_val(conn, "SELECT options FROM ingestion_run WHERE source_id = 'un_sc'")
+    assert opts == {"dry_run": True}
+    # cancel the whole batch
+    out = client.post(f"/api/batches/{res['batch_id']}/cancel", **as_("op")).json()
+    assert sorted(x["result"] for x in out["results"]) == ["CANCELLED", "CANCELLED"]
+    assert client.get(f"/api/batches/{res['batch_id']}", **as_("view")).json()["status"] == "CANCELLED"
+
+
+def test_batch_request_validation_and_override(client):
+    bad = client.post("/api/batches", json={"source_ids": ["un_sc", "nope"], "reason": "test"}, **as_("op"))
+    assert bad.status_code == 422 and "nope" in bad.json()["detail"]
+    empty = client.post("/api/batches", json={"source_ids": [], "reason": "test"}, **as_("op"))
+    assert empty.status_code == 422
+    over = {"source_ids": ["un_sc"], "reason": "test", "override_min_interval": True}
+    assert client.post("/api/batches", json=over, **as_("op")).status_code == 403
+    with tx() as conn:
+        conn.execute(
+            "UPDATE source SET last_attempt_at = now() - interval '2 minutes' WHERE source_id = 'un_sc'"
+        )
+        conn.execute(
+            "UPDATE source SET last_attempt_at = now() - interval '10 minutes' WHERE source_id = 'ofac_sdn'"
+        )
+    r = client.post("/api/batches", json={**over, "source_ids": ["un_sc", "ofac_sdn"]}, **as_("admin")).json()
+    assert [q["source_id"] for q in r["queued"]] == ["ofac_sdn"]  # overridden
+    assert r["refused"][0]["source_id"] == "un_sc" and "5 minutes" in r["refused"][0]["why"]
+    polite = client.post(
+        "/api/batches", json={"source_ids": ["uk_fcdo"], "reason": "test"}, **as_("op")
+    ).json()
+    assert polite["queued"] and not polite["refused"]  # never pulled -> allowed
+    # a DRAFT source only runs in dry-run mode
+    un = client.get("/api/sources/un_sc", **as_("admin")).json()["source"]
+    client.post(
+        "/api/sources",
+        **as_("admin"),
+        json={
+            "source_id": "draft_src",
+            "display_name": "Draft source",
+            "adapter_type": "un_consolidated_xml",
+            "config": un["config"],
+            "schedule": {"kind": "INTERVAL", "cadence_minutes": 240, "min_interval_minutes": 60},
+            "reason": "test",
+        },
+    )
+    d1 = client.post("/api/batches", json={"source_ids": ["draft_src"], "reason": "test"}, **as_("op")).json()
+    assert not d1["queued"] and "DRAFT" in d1["refused"][0]["why"]
+    assert client.get(f"/api/batches/{d1['batch_id']}", **as_("view")).json()["status"] == "REFUSED"
+    d2 = client.post(
+        "/api/batches", json={"source_ids": ["draft_src"], "reason": "test", "mode": "dry_run"}, **as_("op")
+    )
+    assert d2.json()["queued"]
+
+
+def test_batch_list_filters_nesting_and_paging(client):
+    load_fixture("un_sc", "un/consolidated_v1.xml", manual_load=True)
+    load_fixture("uk_fcdo", "uk/uk_sanctions_list_v1.xml", manual_load=True)
+    r = client.post(
+        "/api/sources/eu_fsf/runs", json={"mode": "dry_run", "reason": "single"}, **as_("op")
+    ).json()
+    assert r["batch_id"]  # the single-source endpoint also creates a batch (of one)
+    all_ = client.get("/api/batches", **as_("view")).json()
+    assert len(all_["batches"]) == 3 and all_["next_before"] is None
+    newest = all_["batches"][0]
+    assert newest["batch_id"] == r["batch_id"] and newest["runs"][0]["source_id"] == "eu_fsf"
+    only_un = client.get("/api/batches?source_id=un_sc", **as_("view")).json()["batches"]
+    assert [b["runs"][0]["source_id"] for b in only_un] == ["un_sc"]
+    done = client.get("/api/batches?status=COMPLETED", **as_("view")).json()["batches"]
+    assert {b["runs"][0]["source_id"] for b in done} == {"un_sc", "uk_fcdo"}
+    page1 = client.get("/api/batches?limit=2", **as_("view")).json()
+    assert len(page1["batches"]) == 2 and page1["next_before"]
+    page2 = client.get(
+        "/api/batches", params={"limit": 2, "before": page1["next_before"]}, **as_("view")
+    ).json()
+    assert len(page2["batches"]) == 1
+    run_detail = client.get(f"/api/runs/{r['run_id']}", **as_("view")).json()
+    assert run_detail["batch"]["batch_id"] == r["batch_id"] and run_detail["batch"]["trigger"] == "MANUAL"

@@ -25,7 +25,8 @@ all parsing and publishing, and a person approves anything the agent extracts. D
   * `records_as_of(snapshot)` returns exactly what any screening decision used.
   * Append-only evidence tables and a full `audit_log`.
   * Every agent tool call, guard decision, token and dollar is recorded.
-* **Operations console (`/ui`).** Live run progress (SSE), source health against SLOs, data quality
+* **Operations console (`/ui`).** Runs grouped into **batches** (a scheduled cycle, an agent cycle, or an
+  ad-hoc request) with each source's result inside and live progress (SSE). Also source health against SLOs, data quality
   (fill rates against floors, trends, issues), enrichment and legal-evidence coverage, agent activity and
   cost, and the review queue.
 * **Ask the agent.** Natural-language questions about ingestion status, fields, counts and data-quality
@@ -35,7 +36,9 @@ all parsing and publishing, and a person approves anything the agent extracts. D
   * Enable, pause or disable sources, with reasons and core-list rules.
   * Interval or cron schedules with a live preview and politeness floors.
   * Versioned configuration with rollback, and **maker-checker** for URL and host changes.
-  * Ad-hoc runs: normal, force re-fetch, dry run or re-parse.
+  * Ad-hoc runs of **one or many sources as a batch**: normal, force re-fetch or dry run. Re-parse is
+    per source.
+  * Interval schedules are clock-aligned (UTC), so each scheduled cycle is one batch.
   * An add-source wizard (DRAFT, then dry run, then approval) and global settings.
 
 | Overview | Data quality |
@@ -43,6 +46,8 @@ all parsing and publishing, and a person approves anything the agent extracts. D
 | ![Overview](docs/img/overview.png) | ![Data quality](docs/img/quality.png) |
 | **Run detail (checkpoints, evidence)** | **Ask the agent (aggregate-only)** |
 | ![Run detail](docs/img/run_detail.png) | ![Ask](docs/img/ask.png) |
+| **Runs, grouped into batches** | **Run several sources as one batch** |
+| ![Runs](docs/img/runs.png) | ![Run sources dialog](docs/img/run_sources_dialog.png) |
 
 ## Quick start
 
@@ -74,10 +79,10 @@ uv run sanctions-agent supervise         # scheduler, workers, watchdog, agent (
 | `db upgrade` | Apply migrations (schema, analytics views, analyst role) |
 | `sources import [--overwrite]` / `sources export` / `sources list` | Seed YAML in and out of the database (the DB is the live config) |
 | `serve` / `supervise [--no-agent]` / `tick` | Run the API, the supervisor loop, or one supervisor tick |
-| `run -s <id> [--mode dry_run\|force_refetch]` | Run one source now, in this process |
+| `run -s <id> [-s <id> ...] [--mode dry_run\|force_refetch]` | Run one or more sources now as one batch, in this process |
 | `reparse -s <id> --sha256 <hash>` | Re-process an archived file after a parser fix (no download) |
 | `load-manual -s <id> --file f --reason "..."` | NFR-08: load a file obtained out-of-band through the normal pipeline |
-| `status` / `ask "question"` | Health summary / aggregate Q&A |
+| `status` / `ask "question"` | Health summary with recent batches / aggregate Q&A |
 | `proposals list\|show\|approve\|reject` | Review queue (maker-checker) |
 | `verify-sources [--write-known-paths]` | Live conformance probe: drift, fill rates, suggested floors, conditional GET |
 | `pin-schemas -s <id> --url <xsd>` | Pin a publisher schema for file validation |
